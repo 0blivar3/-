@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://YOUR-DOMAIN.pages.dev/sitemap.xml
