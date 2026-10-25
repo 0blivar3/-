@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Закулисье Майнкрафта Вики — Экспертный портал рецензий</title>
+  <meta name="description" content="Портал рецензий и оценок статей вики «Закулисье Майнкрафта»: 90-балльная система оценивания, рейтинг авторов, калькулятор ценности статей ЗМВ.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0a0b10">
+  <!-- ЗАМЕНИТЕ https://YOUR-DOMAIN.pages.dev на адрес вашего сайта (здесь, в robots.txt и sitemap.xml) -->
+  <link rel="canonical" href="https://YOUR-DOMAIN.pages.dev/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Закулисье Майнкрафта Вики">
+  <meta property="og:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
+  <meta property="og:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
+  <meta property="og:url" content="https://YOUR-DOMAIN.pages.dev/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
+  <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
+  </script>
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">К содержимому</a>
+
+  <header class="header">
+    <h1>🌐 Закулисье Майнкрафта Вики</h1>
+    <div class="header-actions">
+      <button type="button" class="btn btn-outline admin-only" id="exportBtn">💾 Экспорт JSON</button>
+      <button type="button" class="btn btn-outline admin-only" id="importBtn">📂 Импорт</button>
+      <input type="file" id="importFileInput" hidden accept="application/json,.json">
+      <button type="button" class="btn btn-outline" id="loginBtn">🔑 Вход админа</button>
+      <button type="button" class="btn btn-outline admin-only" id="logoutBtn">🚪 Выйти</button>
+    </div>
+  </header>
+
+  <nav class="nav-tabs" aria-label="Разделы сайта">
+    <a class="nav-btn" href="#/home" data-route="home">🏠 Главная</a>
+    <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
+    <a class="nav-btn" href="#/evaluator" data-route="evaluator">📝 Оценить статью</a>
+    <a class="nav-btn" href="#/article" data-route="article">📄 Просмотр статьи</a>
+    <a class="nav-btn" href="#/authors" data-route="authors">👥 Авторы</a>
+    <a class="nav-btn" href="#/critics" data-route="critics">🤖 Критики</a>
+    <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
+    <a class="nav-btn" href="#/system" data-route="system">ℹ️ Формула (90б)</a>
+  </nav>
+
+  <noscript><div class="panel">Для работы портала нужен включённый JavaScript.</div></noscript>
+
+  <main id="main" tabindex="-1">
+
+    <!-- ГЛАВНАЯ -->
+    <section id="tab-home" class="tab-content" aria-label="Главная">
+      <div class="wrap">
+        <div id="loadError" class="notice notice-error" hidden></div>
+        <div id="heroContainer"></div>
+        <div class="home-widgets-grid">
+          <div>
+            <div class="row-between mb-12">
+              <h2 class="section-title">💬 Лента рецензий и оценок</h2>
+              <label class="sr-only" for="feedSortSelect">Сортировка</label>
+              <select id="feedSortSelect" class="input-field input-auto no-mb">
+                <option value="newest">Сначала новые</option>
+                <option value="highest">С высоким баллом</option>
+                <option value="lowest">С низким баллом</option>
+              </select>
+            </div>
+            <div id="recentFeed"></div>
+            <button type="button" class="btn btn-outline" id="feedMoreBtn" hidden>Показать ещё</button>
+          </div>
+          <aside>
+            <div class="panel">
+              <h2 class="panel-title">📊 Статистика Вики</h2>
+              <div class="feed-stats-grid">
+                <div class="stat-card"><div class="stat-card-val" id="statTotalReviews">0</div><div class="stat-card-lbl">Рецензий</div></div>
+                <div class="stat-card"><div class="stat-card-val" id="statAvgScore">0 / 90</div><div class="stat-card-lbl">Ср. балл</div></div>
+              </div>
+            </div>
+            <div class="panel">
+              <h2 class="panel-title">🔥 Популярные авторы</h2>
+              <div id="homeTopAuthorsList"></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ЦЕННОСТЬ ЗМВ -->
+    <section id="tab-value" class="tab-content" aria-label="Ценность статей ЗМВ">
+      <div class="wrap wrap-1100">
+        <div class="panel panel-purple">
+          <h2 class="panel-title purple-text">
+            <span>🧮 Калькулятор ценности статей ЗМВ</span>
+            <span class="muted small normal">Формула: V = (R + C + D) × Q × M</span>
+          </h2>
+
+          <div class="result-value-box">
+            <div class="muted small upper bold">Итоговая ценность статьи (V)</div>
+            <div class="val-score-num" id="calcValRes" aria-live="polite">15.14</div>
+            <div id="calcCatBadge" class="val-category-badge cat-emerald">❇️ Изумрудная статья</div>
+            <div class="muted tiny mt-10" id="calcFormulaBreakdown"></div>
+          </div>
+
+          <div class="zmvi-grid-calc">
+            <div>
+              <div class="calc-card">
+                <div class="calc-card-title"><span>1. Редкость (R): 1–5 баллов</span><span class="badge-val" id="badgeR">4.0</span></div>
+                <label class="field-label" for="v_r_concept">Уникальность концепции:</label>
+                <select id="v_r_concept" class="input-field zmvi-in">
+                  <option value="0.5">0.5 б — Распространённая (знакомая идея)</option>
+                  <option value="1.5">1.5 б — Редкая (необычное сочетание элементов)</option>
+                  <option value="2.5" selected>2.5 б — Уникальная (самостоятельная идея)</option>
+                </select>
+                <label class="field-label" for="v_r_impl">Уникальность реализации:</label>
+                <select id="v_r_impl" class="input-field zmvi-in">
+                  <option value="0.5">0.5 б — Распространённая (стандартная подача)</option>
+                  <option value="1.5" selected>1.5 б — Редкая (необычные приёмы/оформление)</option>
+                  <option value="2.5">2.5 б — Уникальная (выразительный авторский подход)</option>
+                </select>
+              </div>
+
+              <div class="calc-card">
+                <div class="calc-card-title"><span>2. Целостность (C): 1–5 баллов</span><span class="badge-val" id="badgeC">4.0</span></div>
+                <label class="field-label" for="v_c_format">Формат и масштаб:</label>
+                <select id="v_c_format" class="input-field zmvi-in">
+                  <option value="0">0 б — Преимущественно заготовка / недостаточно</option>
+                  <option value="1" selected>1 б — Достаточный объём, структура и раскрытие</option>
+                </select>
+                <label class="field-label" for="v_c_concept">Концептуальная целостность:</label>
+                <select id="v_c_concept" class="input-field zmvi-in">
+                  <option value="0.5">0.5 б — Низкая (элементы плохо связаны)</option>
+                  <option value="1.5" selected>1.5 б — Умеренная (идея есть, слабо интегрированы детали)</option>
+                  <option value="2.5">2.5 б — Высокая (все детали согласованы)</option>
+                </select>
+                <label class="field-label" for="v_c_semantic">Смысловая целостность:</label>
+                <select id="v_c_semantic" class="input-field zmvi-in">
+                  <option value="0.5">0.5 б — Низкая (детали обособлены)</option>
+                  <option value="1.5" selected>1.5 б — Высокая (общая логика усиливает замысел)</option>
+                </select>
+              </div>
+
+              <div class="calc-card">
+                <div class="calc-card-title"><span>3. Глубина (D): 1–5 баллов</span><span class="badge-val" id="badgeD">3.0</span></div>
+                <label class="field-label" for="v_depth">Уровень содержания:</label>
+                <select id="v_depth" class="input-field zmvi-in">
+                  <option value="1">1 б — Функциональное описание (базовые свойства/внешность)</option>
+                  <option value="2">2 б — Развлекательное содержание (события, опасности, юмор)</option>
+                  <option value="3" selected>3 б — Эмоциональная и психологическая глубина</option>
+                  <option value="4">4 б — Интеллектуальная глубина (сложные идеи, закономерности)</option>
+                  <option value="5">5 б — Фундаментальная глубина (вневременные темы, концепции)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <div class="calc-card">
+                <div class="calc-card-title"><span>4. Качество (Q): 10%–100%</span><span class="badge-val" id="badgeQ">0.80</span></div>
+                <label class="field-label" for="v_score_90">Результат оценки по 90-балльной системе (S):</label>
+                <div class="row-gap">
+                  <input type="range" id="v_score_90" class="zmvi-in" min="9" max="90" value="72">
+                  <output class="score-out" id="v_score_90_lbl" for="v_score_90">72/90</output>
+                </div>
+                <p class="muted tiny mt-4">Формула нормализации: Q = S / 90.</p>
+              </div>
+
+              <div class="calc-card">
+                <div class="calc-card-title"><span>5. Влияние (M): 1.12–2.00</span><span class="badge-val" id="badgeM">1.72</span></div>
+                <label class="field-label" for="v_m_author">Известность автора:</label>
+                <select id="v_m_author" class="input-field zmvi-in">
+                  <option value="0.5">0.5 б — Минимальная (автор почти неизвестен)</option>
+                  <option value="1.5">1.5 б — Низкая (малоизвестен)</option>
+                  <option value="2.5" selected>2.5 б — Средняя (достаточно известен)</option>
+                  <option value="3.5">3.5 б — Высокая (очень известен)</option>
+                  <option value="4.5">4.5 б — Максимальная (один из ключевых авторов)</option>
+                </select>
+                <label class="field-label" for="v_m_expect">Ожидание публикации:</label>
+                <select id="v_m_expect" class="input-field zmvi-in">
+                  <option value="0.5">0.5 б — Минимальное (ожидание отсутствует)</option>
+                  <option value="1.5">1.5 б — Низкое (интерес незначительный)</option>
+                  <option value="2.5" selected>2.5 б — Среднее (умеренное ожидание)</option>
+                  <option value="3.5">3.5 б — Высокое (высокий ажиотаж)</option>
+                  <option value="4.5">4.5 б — Максимальное (исключительный анонс)</option>
+                </select>
+              </div>
+
+              <div class="calc-card calc-card-soft">
+                <div class="bold small mb-8">Шкала категорий статьи:</div>
+                <table class="table-custom">
+                  <thead><tr><th>Итоговый результат V</th><th>Категория</th></tr></thead>
+                  <tbody>
+                    <tr><td>0.34 – 5.99</td><td class="bold cat-silver-t">🥈 Серебряная</td></tr>
+                    <tr><td>6.00 – 11.99</td><td class="bold cat-gold-t">🥇 Золотая</td></tr>
+                    <tr><td>12.00 – 17.99</td><td class="bold cat-emerald-t">❇️ Изумрудная</td></tr>
+                    <tr><td>18.00 – 23.99</td><td class="bold cat-sapphire-t">🔷 Сапфировая</td></tr>
+                    <tr><td>24.00 – 30.00</td><td class="bold cat-ruby-t">🔻 Рубиновая</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title">📖 Регламент и структура системы ценности ЗМВ</h2>
+          <div class="doc-text">
+            <h3>1. Назначение системы</h3>
+            <p>Система ценности статей ЗМВ предназначена для комплексной оценки творческой, концептуальной и литературной значимости материалов о Закулисье. Она учитывает оригинальность идеи, внутреннюю согласованность статьи, её глубину, качество исполнения и потенциальное влияние.</p>
+            <h3>2. Формула расчёта</h3>
+            <div class="formula-box">V = (R + C + D) × Q × M</div>
+            <p>Где <strong>R</strong> (Редкость), <strong>C</strong> (Целостность) и <strong>D</strong> (Глубина) формируют базовую оценку. <strong>Q</strong> (Качество) корректирует её по 90-балльной системе, а <strong>M</strong> (Влияние) учитывает известность автора и ожидания сообщества.</p>
+            <h3>3. Перевод суммарного балла влияния в множитель (M)</h3>
+            <p>Сумма баллов за известность автора и ожидание публикации (1–9) преобразуется в множитель:</p>
+            <table class="table-custom table-narrow">
+              <thead><tr><th>Суммарный балл</th><th>Множитель M</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>1.12</td></tr><tr><td>2</td><td>1.34</td></tr><tr><td>3</td><td>1.50</td></tr>
+                <tr><td>4</td><td>1.62</td></tr><tr><td>5</td><td>1.72</td></tr><tr><td>6</td><td>1.81</td></tr>
+                <tr><td>7</td><td>1.88</td></tr><tr><td>8</td><td>1.94</td></tr><tr><td>9</td><td>2.00</td></tr>
+              </tbody>
+            </table>
+            <h3>4. Общие правила оценивания</h3>
+            <ul>
+              <li>Оценивать статью в контексте существующих материалов ЗМВ, а не абстрактно.</li>
+              <li>Не путать объём с качеством: длинная статья не обязательно лучше короткой.</li>
+              <li>Не требовать философии от каждого материала: атмосфера, эстетика и механики также имеют ценность.</li>
+              <li>Разделять оригинальность идеи и качество её исполнения.</li>
+              <li>Применять одинаковые стандарты независимо от административного статуса автора.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ОЦЕНИТЬ СТАТЬЮ -->
+    <section id="tab-evaluator" class="tab-content" aria-label="Оценить статью">
+      <div class="wrap">
+        <form id="reviewForm" class="rzt-eval-box mb-20" novalidate>
+          <div class="rzt-grid-4">
+            <div class="rzt-slider-item">
+              <div class="rzt-slider-header"><label for="c1">Текст / Понятность</label><output class="rzt-slider-val" id="val1" for="c1">5</output></div>
+              <input type="range" id="c1" class="crit" min="1" max="10" value="5">
+            </div>
+            <div class="rzt-slider-item">
+              <div class="rzt-slider-header"><label for="c2">Структура / Вики</label><output class="rzt-slider-val" id="val2" for="c2">5</output></div>
+              <input type="range" id="c2" class="crit" min="1" max="10" value="5">
+            </div>
+            <div class="rzt-slider-item">
+              <div class="rzt-slider-header"><label for="c3">Реализация концепта</label><output class="rzt-slider-val" id="val3" for="c3">5</output></div>
+              <input type="range" id="c3" class="crit" min="1" max="10" value="5">
+            </div>
+            <div class="rzt-slider-item">
+              <div class="rzt-slider-header"><label for="c4">Оригинальность</label><output class="rzt-slider-val" id="val4" for="c4">5</output></div>
+              <input type="range" id="c4" class="crit" min="1" max="10" value="5">
+            </div>
+          </div>
+
+          <div class="rzt-atm-box">
+            <div class="rzt-slider-header mb-6">
+              <label for="cAtm" class="purple-text">Атмосфера / Вайб</label>
+              <output class="rzt-slider-val purple-text big" id="valAtm" for="cAtm">5</output>
+            </div>
+            <input type="range" id="cAtm" class="crit" min="1" max="10" value="5">
+          </div>
+
+          <div class="meta-inputs-row">
+            <div>
+              <label class="field-label" for="articleTitle">Название статьи:</label>
+              <input type="text" id="articleTitle" class="input-field" list="articleList" maxlength="150" minlength="2" required placeholder="Уровень 0 - «Старые коридоры»" autocomplete="off">
+              <datalist id="articleList"></datalist>
+            </div>
+            <div>
+              <label class="field-label" for="reviewTitle">Заголовок рецензии:</label>
+              <input type="text" id="reviewTitle" class="input-field" maxlength="120" minlength="2" required placeholder="Превосходная атмосфера" autocomplete="off">
+            </div>
+            <div>
+              <label class="field-label" for="authorSelect">Автор статьи:</label>
+              <select id="authorSelect" class="input-field" required></select>
+            </div>
+            <div>
+              <div id="userNickBlock">
+                <label class="field-label" for="reviewerName">Ваш никнейм:</label>
+                <input type="text" id="reviewerName" class="input-field" maxlength="32" minlength="2" required placeholder="Например, Steve_2007" autocomplete="nickname">
+              </div>
+              <div id="adminReviewerBlock" hidden>
+                <label class="field-label" for="reviewerKind">Рецензент (режим админа):</label>
+                <select id="reviewerKind" class="input-field">
+                  <option value="ai">ИИ-критик</option>
+                  <option value="user">Пользователь</option>
+                </select>
+                <select id="aiProfile" class="input-field" aria-label="ИИ-критик"></select>
+              </div>
+            </div>
+          </div>
+
+          <label class="sr-only" for="reviewText">Текст рецензии</label>
+          <textarea id="reviewText" rows="6" maxlength="5000" minlength="20" required placeholder="Введите развёрнутый текст вашей рецензии (от 20 символов)…"></textarea>
+          <div class="muted tiny text-right"><span id="textCounter">0</span> / 5000</div>
+
+          <!-- Ловушка для ботов: людям не видна -->
+          <div class="hp" aria-hidden="true">
+            <label for="website">Не заполняйте это поле</label>
+            <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+          </div>
+          <div id="turnstileBox"></div>
+
+          <p class="muted small" id="moderationNote">Рецензии пользователей публикуются после проверки модератором.</p>
+
+          <div class="rzt-bottom-bar">
+            <div class="rzt-actions-left">
+              <button type="button" class="rzt-btn-action" id="resetBtn">🗄 Очистить черновик</button>
+              <a class="rzt-btn-action" href="#/system">ⓘ Критерии 90-балльной системы</a>
+            </div>
+            <div class="rzt-submit-box">
+              <div class="text-right" aria-live="polite">
+                <span class="rzt-score-big" id="finalScore">45</span>
+                <span class="rzt-score-small" id="maxScoreLabel">/ 90</span>
+              </div>
+              <button type="submit" class="rzt-publish-btn" id="submitBtn" title="Отправить рецензию" aria-label="Отправить рецензию">✓</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="panel">
+          <h2 class="panel-title">
+            <span>📖 Чтение статьи перед оценкой</span>
+            <form class="row-gap wiki-form" id="wikiForm">
+              <label class="sr-only" for="wikiUrl">Адрес статьи</label>
+              <input type="url" id="wikiUrl" class="input-field no-mb" value="https://minecraft-backrooms.fandom.com/ru/wiki/" placeholder="URL статьи вики…">
+              <button type="submit" class="btn">Загрузить</button>
+              <a class="btn btn-outline" id="wikiOpenLink" href="https://minecraft-backrooms.fandom.com/ru/wiki/" target="_blank" rel="noopener noreferrer">Открыть в новой вкладке ↗</a>
+            </form>
+          </h2>
+          <p class="muted small mb-8">Если страница вики не отображается внутри сайта (Fandom может запрещать встраивание), откройте её в новой вкладке.</p>
+          <div class="viewport-container">
+            <iframe id="viewport" class="viewport-frame" title="Страница вики" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СТАТЬЯ -->
+    <section id="tab-article" class="tab-content" aria-label="Просмотр статьи">
+      <div class="wrap wrap-1100">
+        <div id="articleHeaderCard"></div>
+        <div class="row-between mt-15 mb-10">
+          <h2 class="section-title">Все рецензии на эту статью:</h2>
+          <label class="sr-only" for="articleReviewsSortSelect">Сортировка</label>
+          <select id="articleReviewsSortSelect" class="input-field input-auto no-mb">
+            <option value="newest">Сначала новые</option>
+            <option value="oldest">Сначала старые</option>
+            <option value="highest">По высшему баллу</option>
+            <option value="lowest">По низшему баллу</option>
+          </select>
+        </div>
+        <div id="articleReviewsList"></div>
+      </div>
+    </section>
+
+    <!-- АВТОРЫ -->
+    <section id="tab-authors" class="tab-content" aria-label="Авторы">
+      <div class="panel wrap">
+        <h2 class="panel-title">
+          <span>👥 Сообщество авторов вики</span>
+          <button type="button" class="btn btn-outline admin-only" id="toggleAuthorFormBtn">+ Добавить автора</button>
+        </h2>
+
+        <form id="createAuthorForm" class="inline-form" hidden>
+          <div class="bold mb-8">Новый автор:</div>
+          <div class="row-gap">
+            <input type="text" id="newAuthorName" class="input-field no-mb" maxlength="60" minlength="2" required placeholder="Никнейм автора" aria-label="Никнейм автора">
+            <input type="url" id="newAuthorAvatar" class="input-field no-mb" maxlength="300" placeholder="https-URL аватарки (необязательно)" aria-label="URL аватарки">
+            <button type="submit" class="btn">Сохранить</button>
+          </div>
+        </form>
+
+        <div class="author-card-grid" id="authorsGridContainer"></div>
+
+        <div id="authorProfileDetailBlock" class="panel mt-20" hidden>
+          <div class="sub-tabs">
+            <button type="button" class="sub-tab-btn active" id="subTabArticlesBtn">📚 Написанные статьи</button>
+            <button type="button" class="sub-tab-btn" id="subTabReviewsBtn">💬 Полные рецензии</button>
+            <button type="button" class="btn btn-danger btn-outline admin-only ml-auto" id="deleteAuthorBtn">🗑 Удалить автора</button>
+          </div>
+          <div id="authorProfileContent"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- КРИТИКИ -->
+    <section id="tab-critics" class="tab-content" aria-label="Критики">
+      <div class="wrap wrap-1100">
+        <div class="panel">
+          <h2 class="panel-title">Выбор критика</h2>
+          <label class="sr-only" for="aiViewerSelect">Критик</label>
+          <select id="aiViewerSelect" class="input-field no-mb"></select>
+        </div>
+        <div class="panel"><div id="aiProfileContent"></div></div>
+      </div>
+    </section>
+
+    <!-- МОДЕРАЦИЯ -->
+    <section id="tab-moderation" class="tab-content" aria-label="Модерация">
+      <div class="wrap wrap-1100">
+        <div class="panel">
+          <h2 class="panel-title">🛡 Рецензии на модерации</h2>
+          <div id="moderationList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ФОРМУЛА -->
+    <section id="tab-system" class="tab-content" aria-label="Формула оценки">
+      <div class="panel wrap wrap-800">
+        <h2 class="panel-title">Формула оценки (90 баллов)</h2>
+        <div class="doc-text">
+          <p>Четыре базовых критерия оцениваются от 1 до 10: «Текст / Понятность», «Структура / Вики», «Реализация концепта» и «Оригинальность». Их сумма умножается на 1.4, затем на коэффициент критерия «Атмосфера / Вайб» (1–10). Результат округляется и ограничивается 90 баллами.</p>
+          <div class="formula-box">Балл = round((К1 + К2 + К3 + К4) × 1.4 × коэффициент атмосферы), максимум 90</div>
+          <table class="table-custom table-narrow">
+            <thead><tr><th>Атмосфера</th><th>Коэффициент</th></tr></thead>
+            <tbody id="atmTable"></tbody>
+          </table>
+          <p>Балл всегда пересчитывается сервером по вашим оценкам, поэтому подделать его невозможно.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer muted small">Неофициальный фанатский портал. Рецензии пользователей проходят модерацию.</footer>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+  <dialog id="loginDialog" aria-labelledby="loginTitle">
+    <form id="loginForm" method="dialog">
+      <h2 id="loginTitle" class="panel-title">🔑 Вход администратора</h2>
+      <label class="field-label" for="adminPassword">Пароль:</label>
+      <input type="password" id="adminPassword" class="input-field" autocomplete="current-password" required>
+      <div class="row-gap end">
+        <button type="button" class="btn btn-outline" id="loginCancel">Отмена</button>
+        <button type="submit" class="btn btn-purple">Войти</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
