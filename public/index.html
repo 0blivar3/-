@@ -8,13 +8,13 @@
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#0a0b10">
   <!-- ЗАМЕНИТЕ https://YOUR-DOMAIN.pages.dev на адрес вашего сайта (здесь, в robots.txt и sitemap.xml) -->
-  <link rel="canonical" href="https://rizazazakulisieminecraftwiki.pages.dev/">
+  <link rel="canonical" href="https://YOUR-DOMAIN.pages.dev/">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:site_name" content="Закулисье Майнкрафта Вики">
   <meta property="og:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta property="og:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
-  <meta property="og:url" content="https://YOUR-DOMAIN.pages.dev/">
+  <meta property="og:url" content="https://rizazazakulisieminecraftwiki.pages.dev/">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
@@ -29,25 +29,31 @@
   <a class="skip-link" href="#main">К содержимому</a>
 
   <header class="header">
-    <h1>🌐 Закулисье Майнкрафта Вики</h1>
+    <a class="brand" href="#/home"><h1>🌐 Закулисье Майнкрафта Вики</h1></a>
+    <form id="globalSearchForm" class="gsearch" role="search">
+      <label class="sr-only" for="globalSearch">Поиск по сайту</label>
+      <input type="search" id="globalSearch" class="input-field no-mb" placeholder="Поиск: статьи, авторы, пользователи…" maxlength="80" autocomplete="off">
+      <button type="submit" class="btn" aria-label="Найти">🔍</button>
+    </form>
     <div class="header-actions">
-      <button type="button" class="btn btn-outline admin-only" id="exportBtn">💾 Экспорт JSON</button>
+      <button type="button" class="btn btn-outline admin-only" id="exportBtn">💾 Экспорт</button>
       <button type="button" class="btn btn-outline admin-only" id="importBtn">📂 Импорт</button>
       <input type="file" id="importFileInput" hidden accept="application/json,.json">
-      <button type="button" class="btn btn-outline" id="loginBtn">🔑 Вход админа</button>
-      <button type="button" class="btn btn-outline admin-only" id="logoutBtn">🚪 Выйти</button>
+      <button type="button" class="btn btn-outline admin-only" id="adminLogoutBtn">🛡 Выйти из админки</button>
+      <div class="row-gap" id="authBox"></div>
     </div>
   </header>
 
   <nav class="nav-tabs" aria-label="Разделы сайта">
     <a class="nav-btn" href="#/home" data-route="home">🏠 Главная</a>
-    <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
-    <a class="nav-btn" href="#/evaluator" data-route="evaluator">📝 Оценить статью</a>
-    <a class="nav-btn" href="#/article" data-route="article">📄 Просмотр статьи</a>
-    <a class="nav-btn" href="#/authors" data-route="authors">👥 Авторы</a>
+    <a class="nav-btn" href="#/articles" data-route="articles">📚 Статьи</a>
+    <a class="nav-btn" href="#/authors" data-route="authors">✍️ Авторы</a>
+    <a class="nav-btn" href="#/users" data-route="users">👥 Пользователи</a>
     <a class="nav-btn" href="#/critics" data-route="critics">🤖 Критики</a>
-    <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
+    <a class="nav-btn" href="#/evaluator" data-route="evaluator">📝 Оценить статью</a>
+    <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
     <a class="nav-btn" href="#/system" data-route="system">ℹ️ Формула (90б)</a>
+    <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
   </nav>
 
   <noscript><div class="panel">Для работы портала нужен включённый JavaScript.</div></noscript>
@@ -79,6 +85,8 @@
               <div class="feed-stats-grid">
                 <div class="stat-card"><div class="stat-card-val" id="statTotalReviews">0</div><div class="stat-card-lbl">Рецензий</div></div>
                 <div class="stat-card"><div class="stat-card-val" id="statAvgScore">0 / 90</div><div class="stat-card-lbl">Ср. балл</div></div>
+                <div class="stat-card"><div class="stat-card-val" id="statArticles">0</div><div class="stat-card-lbl">Статей</div></div>
+                <div class="stat-card"><div class="stat-card-val" id="statUsers">0</div><div class="stat-card-lbl">Пользователей</div></div>
               </div>
             </div>
             <div class="panel">
@@ -282,33 +290,24 @@
               <select id="authorSelect" class="input-field" required></select>
             </div>
             <div>
-              <div id="userNickBlock">
-                <label class="field-label" for="reviewerName">Ваш никнейм:</label>
-                <input type="text" id="reviewerName" class="input-field" maxlength="32" minlength="2" required placeholder="Например, Steve_2007" autocomplete="nickname">
-              </div>
+              <div class="field-label">Рецензент:</div>
+              <div id="reviewerIdentity" class="reviewer-identity"></div>
               <div id="adminReviewerBlock" hidden>
-                <label class="field-label" for="reviewerKind">Рецензент (режим админа):</label>
-                <select id="reviewerKind" class="input-field">
+                <select id="reviewerKind" class="input-field" aria-label="Рецензент (режим админа)">
                   <option value="ai">ИИ-критик</option>
-                  <option value="user">Пользователь</option>
+                  <option value="user">От моего аккаунта</option>
                 </select>
                 <select id="aiProfile" class="input-field" aria-label="ИИ-критик"></select>
               </div>
             </div>
           </div>
+          <div id="loginPrompt" class="notice" hidden>Чтобы отправить рецензию, <button type="button" class="link-btn" id="loginPromptBtn">войдите в аккаунт</button> или зарегистрируйтесь.</div>
 
           <label class="sr-only" for="reviewText">Текст рецензии</label>
-          <textarea id="reviewText" rows="6" maxlength="5000" minlength="20" required placeholder="Введите развёрнутый текст вашей рецензии (от 20 символов)…"></textarea>
-          <div class="muted tiny text-right"><span id="textCounter">0</span> / 5000</div>
+          <textarea id="reviewText" rows="6" maxlength="10000" minlength="20" required placeholder="Введите развёрнутый текст вашей рецензии (от 20 символов)…"></textarea>
+          <div class="muted tiny text-right"><span id="textCounter">0</span> / <span id="textMax">10000</span></div>
 
-          <!-- Ловушка для ботов: людям не видна -->
-          <div class="hp" aria-hidden="true">
-            <label for="website">Не заполняйте это поле</label>
-            <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
-          </div>
-          <div id="turnstileBox"></div>
-
-          <p class="muted small" id="moderationNote">Рецензии пользователей публикуются после проверки модератором.</p>
+          <p class="muted small" id="moderationNote">Рецензии публикуются после проверки модератором.</p>
 
           <div class="rzt-bottom-bar">
             <div class="rzt-actions-left">
@@ -361,32 +360,158 @@
       </div>
     </section>
 
+    <!-- СТАТЬИ -->
+    <section id="tab-articles" class="tab-content" aria-label="Статьи">
+      <div class="wrap wrap-1100">
+        <div class="panel">
+          <h2 class="panel-title"><span>📚 Статьи</span><span class="muted small normal" id="articlesCount"></span></h2>
+          <div class="toolbar">
+            <label class="sr-only" for="articlesSearch">Поиск статьи</label>
+            <input type="search" id="articlesSearch" class="input-field" placeholder="🔍 Найти статью…" maxlength="80" autocomplete="off">
+            <label class="sr-only" for="articlesSort">Сортировка</label>
+            <select id="articlesSort" class="input-field">
+              <option value="rating">По рейтингу</option>
+              <option value="reviews">По числу рецензий</option>
+              <option value="new">Сначала новые</option>
+              <option value="name">По алфавиту</option>
+            </select>
+          </div>
+          <div class="article-grid" id="articlesGrid"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- АВТОРЫ -->
     <section id="tab-authors" class="tab-content" aria-label="Авторы">
-      <div class="panel wrap">
-        <h2 class="panel-title">
-          <span>👥 Сообщество авторов вики</span>
-          <button type="button" class="btn btn-outline admin-only" id="toggleAuthorFormBtn">+ Добавить автора</button>
-        </h2>
-
-        <form id="createAuthorForm" class="inline-form" hidden>
-          <div class="bold mb-8">Новый автор:</div>
-          <div class="row-gap">
-            <input type="text" id="newAuthorName" class="input-field no-mb" maxlength="60" minlength="2" required placeholder="Никнейм автора" aria-label="Никнейм автора">
-            <input type="url" id="newAuthorAvatar" class="input-field no-mb" maxlength="300" placeholder="https-URL аватарки (необязательно)" aria-label="URL аватарки">
-            <button type="submit" class="btn">Сохранить</button>
+      <div class="wrap">
+        <div class="panel">
+          <h2 class="panel-title">
+            <span>✍️ Авторы статей</span>
+            <button type="button" class="btn btn-outline admin-only" id="toggleAuthorFormBtn">+ Добавить автора</button>
+          </h2>
+          <form id="createAuthorForm" class="inline-form" hidden>
+            <div class="bold mb-8">Новый автор:</div>
+            <div class="row-gap">
+              <input type="text" id="newAuthorName" class="input-field no-mb" maxlength="60" minlength="2" required placeholder="Никнейм автора" aria-label="Никнейм автора">
+              <input type="url" id="newAuthorAvatar" class="input-field no-mb" maxlength="300" placeholder="https-URL аватарки (необязательно)" aria-label="URL аватарки">
+              <button type="submit" class="btn">Сохранить</button>
+            </div>
+          </form>
+          <div class="toolbar">
+            <label class="sr-only" for="authorsSearch">Поиск автора</label>
+            <input type="search" id="authorsSearch" class="input-field" placeholder="🔍 Найти автора…" maxlength="80" autocomplete="off">
+            <label class="sr-only" for="authorsSort">Сортировка</label>
+            <select id="authorsSort" class="input-field">
+              <option value="reviews">По числу рецензий</option>
+              <option value="rating">По среднему баллу</option>
+              <option value="name">По алфавиту</option>
+            </select>
           </div>
-        </form>
+          <div class="card-grid" id="authorsGridContainer"></div>
+        </div>
+      </div>
+    </section>
 
-        <div class="author-card-grid" id="authorsGridContainer"></div>
+    <section id="tab-author" class="tab-content" aria-label="Страница автора">
+      <div class="wrap wrap-1100">
+        <p class="mb-10"><a class="muted" href="#/authors">← Все авторы</a></p>
+        <div id="authorPage"></div>
+      </div>
+    </section>
 
-        <div id="authorProfileDetailBlock" class="panel mt-20" hidden>
-          <div class="sub-tabs">
-            <button type="button" class="sub-tab-btn active" id="subTabArticlesBtn">📚 Написанные статьи</button>
-            <button type="button" class="sub-tab-btn" id="subTabReviewsBtn">💬 Полные рецензии</button>
-            <button type="button" class="btn btn-danger btn-outline admin-only ml-auto" id="deleteAuthorBtn">🗑 Удалить автора</button>
+    <!-- ПОЛЬЗОВАТЕЛИ -->
+    <section id="tab-users" class="tab-content" aria-label="Пользователи">
+      <div class="wrap">
+        <div class="panel">
+          <h2 class="panel-title"><span>👥 Пользователи</span></h2>
+          <div class="toolbar">
+            <label class="sr-only" for="usersSearch">Поиск пользователя</label>
+            <input type="search" id="usersSearch" class="input-field" placeholder="🔍 Найти пользователя…" maxlength="80" autocomplete="off">
+            <label class="sr-only" for="usersSort">Сортировка</label>
+            <select id="usersSort" class="input-field">
+              <option value="reviews">По числу рецензий</option>
+              <option value="new">Сначала новые</option>
+              <option value="name">По алфавиту</option>
+            </select>
           </div>
-          <div id="authorProfileContent"></div>
+          <div class="card-grid" id="usersGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-user" class="tab-content" aria-label="Профиль пользователя">
+      <div class="wrap wrap-1100">
+        <p class="mb-10"><a class="muted" href="#/users">← Все пользователи</a></p>
+        <div id="userPage"></div>
+      </div>
+    </section>
+
+    <!-- МОЙ ПРОФИЛЬ -->
+    <section id="tab-profile" class="tab-content" aria-label="Мой профиль">
+      <div class="wrap wrap-800">
+        <div id="profileGuest" class="panel" hidden>
+          <h2 class="panel-title">👤 Мой профиль</h2>
+          <p class="mb-10">Войдите или создайте аккаунт, чтобы писать рецензии и вести свой профиль.</p>
+          <div class="row-gap"><button type="button" class="btn" id="profileGuestLogin">Войти</button><button type="button" class="btn btn-purple" id="profileGuestRegister">Регистрация</button></div>
+        </div>
+        <div id="profileBox" hidden>
+          <div class="panel">
+            <h2 class="panel-title"><span>👤 Мой профиль</span><a class="btn btn-outline" id="profileViewLink" href="#/users">Как видят другие</a></h2>
+            <form id="profileForm">
+              <div class="row-gap mb-12"><div id="profileAvatarPreview"></div><div><div class="bold" id="profileUsername"></div><div class="muted small" id="profileSince"></div></div></div>
+              <label class="field-label" for="profileAvatar">Ссылка на аватар (https, необязательно)</label>
+              <input type="url" id="profileAvatar" class="input-field" maxlength="300" placeholder="https://…">
+              <label class="field-label" for="profileBio">О себе</label>
+              <textarea id="profileBio" class="input-field" rows="4" maxlength="600" placeholder="Расскажите о себе и своих вкусах…"></textarea>
+              <div class="row-between"><span class="muted tiny" id="profileBioCounter">0 / 600</span><button type="submit" class="btn btn-purple">Сохранить профиль</button></div>
+            </form>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title">✍️ Моя карточка автора</h2>
+            <div id="myAuthorBox"></div>
+            <form id="createMyAuthorForm" class="inline-form" hidden>
+              <label class="field-label" for="myAuthorName">Имя автора</label>
+              <input type="text" id="myAuthorName" class="input-field" maxlength="60" minlength="2" required>
+              <label class="field-label" for="myAuthorAvatar">Ссылка на аватар (https, необязательно)</label>
+              <input type="url" id="myAuthorAvatar" class="input-field" maxlength="300" placeholder="https://…">
+              <label class="field-label" for="myAuthorBio">Об авторе</label>
+              <textarea id="myAuthorBio" class="input-field" rows="3" maxlength="600"></textarea>
+              <button type="submit" class="btn">Создать карточку автора</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title">💬 Мои рецензии</h2>
+            <div id="myReviewsList"></div>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title">🔒 Смена пароля</h2>
+            <form id="passwordForm">
+              <label class="field-label" for="pwCurrent">Текущий пароль</label>
+              <input type="password" id="pwCurrent" class="input-field" autocomplete="current-password" required>
+              <label class="field-label" for="pwNew">Новый пароль (от 8 символов)</label>
+              <input type="password" id="pwNew" class="input-field" autocomplete="new-password" minlength="8" maxlength="128" required>
+              <button type="submit" class="btn">Изменить пароль</button>
+            </form>
+          </div>
+          <div class="panel panel-danger">
+            <h2 class="panel-title">⚠️ Удаление аккаунта</h2>
+            <p class="muted small mb-10">Аккаунт будет удалён без восстановления. Ваши рецензии останутся на сайте, но перестанут быть связаны с профилем.</p>
+            <form id="deleteAccountForm" class="row-gap">
+              <label class="sr-only" for="deletePassword">Пароль для подтверждения</label>
+              <input type="password" id="deletePassword" class="input-field no-mb input-auto" placeholder="Пароль для подтверждения" autocomplete="current-password" required>
+              <button type="submit" class="btn btn-danger">Удалить аккаунт</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ПОИСК -->
+    <section id="tab-search" class="tab-content" aria-label="Результаты поиска">
+      <div class="wrap wrap-1100">
+        <div class="panel">
+          <h2 class="panel-title" id="searchTitle">Поиск</h2>
+          <div id="searchResults"></div>
         </div>
       </div>
     </section>
@@ -430,7 +555,7 @@
     </section>
   </main>
 
-  <footer class="footer muted small">Неофициальный фанатский портал. Рецензии пользователей проходят модерацию.</footer>
+  <footer class="footer muted small">Неофициальный фанатский портал. Рецензии проходят модерацию. · <a href="#" id="adminLoginLink">Вход для администратора</a></footer>
 
   <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 
@@ -442,6 +567,26 @@
       <div class="row-gap end">
         <button type="button" class="btn btn-outline" id="loginCancel">Отмена</button>
         <button type="submit" class="btn btn-purple">Войти</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="authDialog" aria-labelledby="authTitle">
+    <form id="authForm">
+      <h2 id="authTitle" class="sr-only">Аккаунт</h2>
+      <div class="sub-tabs">
+        <button type="button" class="sub-tab-btn active" id="authTabLogin">Вход</button>
+        <button type="button" class="sub-tab-btn" id="authTabRegister">Регистрация</button>
+      </div>
+      <label class="field-label" for="authUsername">Никнейм</label>
+      <input type="text" id="authUsername" class="input-field" autocomplete="username" maxlength="24" required>
+      <label class="field-label" for="authPassword">Пароль</label>
+      <input type="password" id="authPassword" class="input-field" autocomplete="current-password" maxlength="128" required>
+      <p class="muted tiny mb-10" id="authHint"></p>
+      <div id="turnstileBox" hidden></div>
+      <div class="row-gap end">
+        <button type="button" class="btn btn-outline" id="authCancel">Отмена</button>
+        <button type="submit" class="btn btn-purple" id="authSubmit">Войти</button>
       </div>
     </form>
   </dialog>

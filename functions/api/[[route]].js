@@ -1,155 +1,19 @@
 // Cloudflare Pages Function: весь API сайта (/api/*).
-// Привязки: DB (D1). Секреты: ADMIN_PASSWORD (обязательно, >= 12 символов),
-// TURNSTILE_SECRET и TURNSTILE_SITE_KEY (необязательно, защита от ботов).
+// Привязки: DB (D1). Секреты: ADMIN_PASSWORD (обязательно, >= 12 символов).
+// Необязательно: TURNSTILE_SECRET + TURNSTILE_SITE_KEY (защита регистрации от ботов),
+// PBKDF2_ITERATIONS (10000–100000, если на бесплатном плане не хватает лимита CPU).
 
-const ATM = { 1: 1.0, 2: 1.0675, 3: 1.1349, 4: 1.2024, 5: 1.2699, 6: 1.3373, 7: 1.4048, 8: 1.4723, 9: 1.5397, 10: 1.6072 };
-const AI_NAMES = ['ChatGPT', 'Claude', 'Gemini', 'DeepSeek', 'Grok'];
-const SESSION_COOKIE = 'wb_admin';
-const SESSION_MS = 8 * 3600 * 1000;
-const PENDING_CAP = 300;
-const LIMITS = { article: 150, title: 120, nick: 32, body: 5000, minBody: 20, authorName: 60 };
-const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+import {
+  AI_NAMES, ID_RE, LIMITS, HttpError, json, clean, optionalText, parseAvatar, parseCriteria, calcScore,
+  readJson, ipHash, rateLimit, verifyTurnstile, safeEqual, sha256Hex,
+} from '../../lib/common.js';
+import {
+  hashPassword, verifyPassword, dummyHash, normalizeUsername, usernameKey, validatePassword,
+  createSession, getSessionUser, destroySession, sessionCookie,
+  adminEnabled, adminCookie, makeAdminSession, isAdmin,
+} from '../../lib/auth.js';
 
-const CTRL_LINE = /[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
-const CTRL_MULTI = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
-
-const enc = new TextEncoder();
-
-class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
-}
-
-function json(data, status = 200, headers = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-      ...headers,
-    },
-  });
-}
-
-/* ---------- криптография ---------- */
-
-const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-async function sha256(text) {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(text)));
-}
-
-async function safeEqual(a, b) {
-  const [ha, hb] = await Promise.all([sha256(String(a)), sha256(String(b))]);
-  let diff = 0;
-  for (let i = 0; i < ha.length; i++) diff |= ha[i] ^ hb[i];
-  return diff === 0;
-}
-
-async function hmacHex(secret, message) {
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  return toHex(await crypto.subtle.sign('HMAC', key, enc.encode(message)));
-}
-
-function adminEnabled(env) {
-  return typeof env.ADMIN_PASSWORD === 'string' && env.ADMIN_PASSWORD.length >= 12;
-}
-
-async function makeSession(env) {
-  const exp = Date.now() + SESSION_MS;
-  const sig = await hmacHex('session:' + env.ADMIN_PASSWORD, String(exp));
-  return `${exp}.${sig}`;
-}
-
-function getCookie(request, name) {
-  const header = request.headers.get('Cookie') || '';
-  for (const part of header.split(';')) {
-    const i = part.indexOf('=');
-    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
-  }
-  return null;
-}
-
-async function isAdmin(request, env) {
-  if (!adminEnabled(env)) return false;
-  const value = getCookie(request, SESSION_COOKIE);
-  if (!value) return false;
-  const [exp, sig] = value.split('.');
-  if (!/^\d{10,16}$/.test(exp || '') || !sig || Number(exp) < Date.now()) return false;
-  const expected = await hmacHex('session:' + env.ADMIN_PASSWORD, exp);
-  return safeEqual(sig, expected);
-}
-
-async function requireAdmin(request, env) {
-  if (!(await isAdmin(request, env))) throw new HttpError(401, 'Требуется вход администратора');
-}
-
-const cookieHeader = (value, maxAge) =>
-  `${SESSION_COOKIE}=${value}; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
-
-/* ---------- лимиты и защита от ботов ---------- */
-
-async function ipHash(request, env) {
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  return toHex(await sha256(`${ip}|${env.ADMIN_PASSWORD || 'salt'}`));
-}
-
-async function rateLimit(env, kind, hash, max, windowSec) {
-  const since = Date.now() - windowSec * 1000;
-  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM rate_limit WHERE kind = ? AND ip_hash = ? AND ts > ?')
-    .bind(kind, hash, since).first();
-  if (row && row.n >= max) throw new HttpError(429, 'Слишком много попыток. Попробуйте позже.');
-  await env.DB.prepare('INSERT INTO rate_limit (kind, ip_hash, ts) VALUES (?, ?, ?)').bind(kind, hash, Date.now()).run();
-  if (Math.random() < 0.05) {
-    await env.DB.prepare('DELETE FROM rate_limit WHERE ts < ?').bind(Date.now() - 86400000).run();
-  }
-}
-
-async function verifyTurnstile(env, token, request) {
-  const form = new FormData();
-  form.append('secret', env.TURNSTILE_SECRET);
-  form.append('response', typeof token === 'string' ? token : '');
-  form.append('remoteip', request.headers.get('CF-Connecting-IP') || '');
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form });
-  const data = await res.json().catch(() => ({}));
-  return data.success === true;
-}
-
-/* ---------- валидация ---------- */
-
-function clean(value, { min = 1, max, multiline = false, label = 'Поле' } = {}) {
-  if (typeof value !== 'string') throw new HttpError(400, `${label}: ожидается текст`);
-  let s = value.normalize('NFC');
-  if (multiline) {
-    s = s.replace(/\r\n?/g, '\n').replace(CTRL_MULTI, '').replace(/\n{4,}/g, '\n\n\n').trim();
-  } else {
-    s = s.replace(/[\r\n\t]+/g, ' ').replace(CTRL_LINE, '').replace(/\s+/g, ' ').trim();
-  }
-  const len = [...s].length;
-  if (len < min) throw new HttpError(400, `${label}: слишком коротко (минимум ${min})`);
-  if (len > max) throw new HttpError(400, `${label}: слишком длинно (максимум ${max})`);
-  return s;
-}
-
-function parseCriteria(v) {
-  if (!Array.isArray(v) || v.length !== 5 || !v.every((n) => Number.isInteger(n) && n >= 1 && n <= 10)) {
-    throw new HttpError(400, 'Критерии: нужно 5 целых чисел от 1 до 10');
-  }
-  return v;
-}
-
-function calcScore(c) {
-  return Math.min(90, Math.round((c[0] + c[1] + c[2] + c[3]) * 1.4 * ATM[c[4]]));
-}
-
-function parseAvatar(v) {
-  if (v == null || v === '') return '';
-  if (typeof v !== 'string' || v.length > 300) throw new HttpError(400, 'Аватар: некорректный URL');
-  let u;
-  try { u = new URL(v.trim()); } catch { throw new HttpError(400, 'Аватар: некорректный URL'); }
-  if (u.protocol !== 'https:' || u.username || u.password) throw new HttpError(400, 'Аватар: разрешены только https-ссылки');
-  return u.toString();
-}
+/* ---------- преобразование строк БД ---------- */
 
 function rowToReview(r) {
   return {
@@ -159,6 +23,7 @@ function rowToReview(r) {
     authorId: r.author_id,
     reviewerKind: r.reviewer_kind,
     reviewerName: r.reviewer_name,
+    registered: !!r.registered,
     text: r.body,
     criteria: [r.c1, r.c2, r.c3, r.c4, r.c_atm],
     score: r.score,
@@ -167,59 +32,173 @@ function rowToReview(r) {
   };
 }
 
+const rowToAuthor = (a) => ({
+  id: a.id, name: a.name, avatar: a.avatar, bio: a.bio || '', ownerUsername: a.owner || null, updatedAt: a.updated_at || 0,
+});
+
+const rowToUser = (u) => ({
+  username: u.username, avatar: u.avatar, bio: u.bio, createdAt: u.created_at, banned: !!u.banned,
+});
+
+const SELECT_REVIEWS = 'SELECT *, (reviewer_user_id IS NOT NULL) AS registered FROM reviews';
+
 const INSERT_REVIEW =
-  'INSERT OR IGNORE INTO reviews (id, article_title, review_title, author_id, reviewer_kind, reviewer_name, body, c1, c2, c3, c4, c_atm, score, status, created_at) ' +
-  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+  'INSERT OR IGNORE INTO reviews (id, article_title, review_title, author_id, reviewer_kind, reviewer_name, reviewer_user_id, body, c1, c2, c3, c4, c_atm, score, status, created_at) ' +
+  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
 function bindReview(env, r) {
   const c = r.criteria;
   return env.DB.prepare(INSERT_REVIEW).bind(
-    r.id, r.articleTitle, r.reviewTitle, r.authorId, r.reviewerKind, r.reviewerName, r.text,
+    r.id, r.articleTitle, r.reviewTitle, r.authorId, r.reviewerKind, r.reviewerName, r.reviewerUserId || null, r.text,
     c[0], c[1], c[2], c[3], c[4], calcScore(c), r.status, r.createdAt,
   );
 }
 
-async function readJson(request, maxBytes) {
-  const type = request.headers.get('Content-Type') || '';
-  if (!type.toLowerCase().startsWith('application/json')) throw new HttpError(415, 'Ожидается application/json');
-  const declared = Number(request.headers.get('Content-Length') || 0);
-  if (declared > maxBytes) throw new HttpError(413, 'Слишком большой запрос');
-  const text = await request.text();
-  if (text.length > maxBytes) throw new HttpError(413, 'Слишком большой запрос');
-  try {
-    const data = JSON.parse(text);
-    if (data === null || typeof data !== 'object') throw new Error('bad');
-    return data;
-  } catch {
-    throw new HttpError(400, 'Некорректный JSON');
-  }
-}
+const isUnique = (e) => /UNIQUE|constraint/i.test(String((e && e.message) || e));
 
-/* ---------- обработчики ---------- */
+/* ---------- публичные данные ---------- */
 
-async function getData(env) {
-  const [authors, reviews] = await Promise.all([
-    env.DB.prepare('SELECT id, name, avatar FROM authors ORDER BY created_at ASC, name ASC').all(),
-    env.DB.prepare("SELECT * FROM reviews WHERE status = 'approved' ORDER BY created_at DESC LIMIT 3000").all(),
+async function getData(env, admin) {
+  const usersSql = admin
+    ? 'SELECT username, avatar, bio, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
+    : 'SELECT username, avatar, bio, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
+  const [authors, reviews, users] = await Promise.all([
+    env.DB.prepare(
+      'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
+      'LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC, a.name ASC',
+    ).all(),
+    env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'approved' ORDER BY created_at DESC LIMIT 3000`).all(),
+    env.DB.prepare(usersSql).all(),
   ]);
-  return { authors: authors.results, reviews: reviews.results.map(rowToReview) };
+  return {
+    authors: authors.results.map(rowToAuthor),
+    reviews: reviews.results.map(rowToReview),
+    users: users.results.map(rowToUser),
+  };
 }
 
-async function createReview(request, env) {
-  const admin = await isAdmin(request, env);
-  const body = await readJson(request, 40 * 1024);
+async function meInfo(env, user) {
+  if (!user) return { user: null, authorId: null };
+  const author = await env.DB.prepare('SELECT id FROM authors WHERE owner_user_id = ?').bind(user.id).first();
+  return {
+    user: { username: user.username, avatar: user.avatar, bio: user.bio, createdAt: user.created_at },
+    authorId: author ? author.id : null,
+  };
+}
 
-  // Ловушка для ботов: поле скрыто от людей.
-  if (typeof body.website === 'string' && body.website !== '') return json({ ok: true, status: 'pending' });
+/* ---------- аккаунты ---------- */
 
+async function register(request, env) {
+  const body = await readJson(request, 4 * 1024);
   const hash = await ipHash(request, env);
+  await rateLimit(env, 'register', hash, 5, 3600);
+  if (env.TURNSTILE_SECRET && !(await verifyTurnstile(env, body.turnstile, request))) {
+    throw new HttpError(400, 'Проверка «я не робот» не пройдена');
+  }
+  const { name, key } = normalizeUsername(body.username);
+  const password = validatePassword(body.password);
+  if (await env.DB.prepare('SELECT 1 AS x FROM users WHERE username_key = ?').bind(key).first()) {
+    throw new HttpError(409, 'Это имя уже занято');
+  }
+  const id = crypto.randomUUID();
+  try {
+    await env.DB.prepare('INSERT INTO users (id, username, username_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, name, key, await hashPassword(password, env), Date.now()).run();
+  } catch (e) {
+    if (isUnique(e)) throw new HttpError(409, 'Это имя уже занято');
+    throw e;
+  }
+  const { cookie } = await createSession(env, id);
+  const me = await meInfo(env, { id, username: name, avatar: '', bio: '', created_at: Date.now() });
+  return json({ ok: true, ...me }, 201, { 'Set-Cookie': cookie });
+}
+
+async function login(request, env) {
+  const body = await readJson(request, 2 * 1024);
+  const key = usernameKey(body.username);
+  await rateLimit(env, 'login', await ipHash(request, env), 15, 900);
+  if (key) await rateLimit(env, 'login-user', await sha256Hex(key), 10, 900);
+  const row = key ? await env.DB.prepare('SELECT id, username, avatar, bio, created_at, password_hash, banned FROM users WHERE username_key = ?').bind(key).first() : null;
+  const okPassword = typeof body.password === 'string' && await verifyPassword(body.password, row ? row.password_hash : dummyHash(env));
+  if (!row || !okPassword) throw new HttpError(401, 'Неверное имя пользователя или пароль');
+  if (row.banned) throw new HttpError(403, 'Аккаунт заблокирован');
+  const { cookie } = await createSession(env, row.id);
+  return json({ ok: true, ...(await meInfo(env, row)) }, 200, { 'Set-Cookie': cookie });
+}
+
+async function logout(request, env) {
+  await destroySession(request, env);
+  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+}
+
+async function updateProfile(request, env, user) {
+  const body = await readJson(request, 8 * 1024);
+  const bio = optionalText(body.bio, LIMITS.bio, 'О себе');
+  const avatar = parseAvatar(body.avatar);
+  await env.DB.prepare('UPDATE users SET bio = ?, avatar = ? WHERE id = ?').bind(bio, avatar, user.id).run();
+  return json({ ok: true });
+}
+
+async function changePassword(request, env, user) {
+  const body = await readJson(request, 2 * 1024);
+  await rateLimit(env, 'pwchange', user.id, 5, 900);
+  const row = await env.DB.prepare('SELECT password_hash FROM users WHERE id = ?').bind(user.id).first();
+  if (typeof body.current !== 'string' || !(await verifyPassword(body.current, row.password_hash))) {
+    throw new HttpError(401, 'Текущий пароль неверен');
+  }
+  const next = validatePassword(body.password);
+  await env.DB.batch([
+    env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(await hashPassword(next, env), user.id),
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
+  ]);
+  const { cookie } = await createSession(env, user.id);
+  return json({ ok: true }, 200, { 'Set-Cookie': cookie });
+}
+
+// Удаление аккаунта: рецензии остаются, но отвязываются от пользователя.
+function deleteUserStatements(env, userId) {
+  return [
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    env.DB.prepare('UPDATE reviews SET reviewer_user_id = NULL WHERE reviewer_user_id = ?').bind(userId),
+    env.DB.prepare('UPDATE authors SET owner_user_id = NULL WHERE owner_user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
+  ];
+}
+
+async function deleteAccount(request, env, user) {
+  const body = await readJson(request, 2 * 1024);
+  await rateLimit(env, 'pwchange', user.id, 5, 900);
+  const row = await env.DB.prepare('SELECT password_hash FROM users WHERE id = ?').bind(user.id).first();
+  if (typeof body.password !== 'string' || !(await verifyPassword(body.password, row.password_hash))) {
+    throw new HttpError(401, 'Пароль неверен');
+  }
+  await env.DB.batch(deleteUserStatements(env, user.id));
+  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+}
+
+/* ---------- рецензии ---------- */
+
+async function createReview(request, env, user, admin) {
+  const body = await readJson(request, 64 * 1024);
+
+  let reviewerKind = 'user';
+  let reviewerName;
+  let reviewerUserId = null;
+  if (body.reviewerKind === 'ai') {
+    if (!admin) throw new HttpError(403, 'Рецензии от имени ИИ-критиков добавляет только администратор');
+    if (!AI_NAMES.includes(body.reviewerName)) throw new HttpError(400, 'Неизвестный ИИ-критик');
+    reviewerKind = 'ai';
+    reviewerName = body.reviewerName;
+  } else {
+    if (!user) throw new HttpError(401, 'Войдите или зарегистрируйтесь, чтобы оставить рецензию');
+    reviewerName = user.username;
+    reviewerUserId = user.id;
+  }
+
   if (!admin) {
-    if (env.TURNSTILE_SECRET && !(await verifyTurnstile(env, body.turnstile, request))) {
-      throw new HttpError(400, 'Проверка «я не робот» не пройдена');
-    }
-    await rateLimit(env, 'review', hash, 3, 3600);
+    await rateLimit(env, 'review', user.id, 5, 3600);
     const pending = await env.DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").first();
-    if (pending && pending.n >= PENDING_CAP) throw new HttpError(503, 'Очередь модерации переполнена, попробуйте позже');
+    if (pending && pending.n >= 300) throw new HttpError(503, 'Очередь модерации переполнена, попробуйте позже');
   }
 
   let articleTitle = clean(body.articleTitle, { min: 2, max: LIMITS.article, label: 'Название статьи' });
@@ -227,52 +206,80 @@ async function createReview(request, env) {
   const text = clean(body.text, { min: LIMITS.minBody, max: LIMITS.body, multiline: true, label: 'Текст рецензии' });
   const criteria = parseCriteria(body.criteria);
 
-  let reviewerKind = 'user';
-  let reviewerName;
-  if (admin && body.reviewerKind === 'ai') {
-    if (!AI_NAMES.includes(body.reviewerName)) throw new HttpError(400, 'Неизвестный ИИ-критик');
-    reviewerKind = 'ai';
-    reviewerName = body.reviewerName;
-  } else {
-    reviewerName = clean(body.reviewerName, { min: 2, max: LIMITS.nick, label: 'Никнейм' });
-  }
-
   if (typeof body.authorId !== 'string' || !ID_RE.test(body.authorId)) throw new HttpError(400, 'Выберите автора статьи');
   let authorId = body.authorId;
-  const author = await env.DB.prepare('SELECT id FROM authors WHERE id = ?').bind(authorId).first();
-  if (!author) throw new HttpError(400, 'Автор не найден');
+  if (!(await env.DB.prepare('SELECT id FROM authors WHERE id = ?').bind(authorId).first())) throw new HttpError(400, 'Автор не найден');
 
   // Если рецензии на эту статью уже есть, берём каноничное написание и автора.
-  const existing = await env.DB.prepare(
-    'SELECT article_title, author_id FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1',
-  ).bind(articleTitle).first();
-  if (existing) {
-    articleTitle = existing.article_title;
-    authorId = existing.author_id;
-  }
+  const existing = await env.DB.prepare('SELECT article_title, author_id FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1').bind(articleTitle).first();
+  if (existing) { articleTitle = existing.article_title; authorId = existing.author_id; }
 
   const review = {
-    id: crypto.randomUUID(),
-    articleTitle, reviewTitle, authorId, reviewerKind, reviewerName, text, criteria,
-    status: admin ? 'approved' : 'pending',
-    createdAt: Date.now(),
+    id: crypto.randomUUID(), articleTitle, reviewTitle, authorId, reviewerKind, reviewerName, reviewerUserId, text, criteria,
+    status: admin ? 'approved' : 'pending', createdAt: Date.now(),
   };
   await bindReview(env, review).run();
   return json({ ok: true, status: review.status, id: review.id }, 201);
 }
 
-async function createAuthor(request, env) {
-  const body = await readJson(request, 4 * 1024);
+/* ---------- авторы ---------- */
+
+async function createOwnAuthor(request, env, user) {
+  const body = await readJson(request, 8 * 1024);
+  if (await env.DB.prepare('SELECT id FROM authors WHERE owner_user_id = ?').bind(user.id).first()) {
+    throw new HttpError(409, 'У вас уже есть карточка автора');
+  }
+  await rateLimit(env, 'author', user.id, 3, 3600);
   const name = clean(body.name, { min: 2, max: LIMITS.authorName, label: 'Имя автора' });
   const avatar = parseAvatar(body.avatar);
+  const bio = optionalText(body.bio, LIMITS.bio, 'Описание');
   const id = 'a_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  const now = Date.now();
   try {
-    await env.DB.prepare('INSERT INTO authors (id, name, avatar, created_at) VALUES (?, ?, ?, ?)')
-      .bind(id, name, avatar, Date.now()).run();
-  } catch {
-    throw new HttpError(409, 'Автор с таким именем уже существует');
+    await env.DB.prepare('INSERT INTO authors (id, name, avatar, bio, owner_user_id, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, name, avatar, bio, user.id, now, now).run();
+  } catch (e) {
+    if (isUnique(e)) throw new HttpError(409, 'Автор с таким именем уже существует');
+    throw e;
   }
-  return json({ ok: true, author: { id, name, avatar } }, 201);
+  return json({ ok: true, id }, 201);
+}
+
+async function updateAuthor(request, env, id, user, admin) {
+  const author = await env.DB.prepare('SELECT id, owner_user_id FROM authors WHERE id = ?').bind(id).first();
+  if (!author) throw new HttpError(404, 'Автор не найден');
+  if (!admin && !(user && author.owner_user_id === user.id)) throw new HttpError(403, 'Нет прав на редактирование этой карточки');
+  const body = await readJson(request, 8 * 1024);
+  const name = clean(body.name, { min: 2, max: LIMITS.authorName, label: 'Имя автора' });
+  const avatar = parseAvatar(body.avatar);
+  const bio = optionalText(body.bio, LIMITS.bio, 'Описание');
+  try {
+    await env.DB.prepare('UPDATE authors SET name = ?, avatar = ?, bio = ?, updated_at = ? WHERE id = ?')
+      .bind(name, avatar, bio, Date.now(), id).run();
+  } catch (e) {
+    if (isUnique(e)) throw new HttpError(409, 'Автор с таким именем уже существует');
+    throw e;
+  }
+  return json({ ok: true });
+}
+
+/* ---------- администратор ---------- */
+
+async function adminCreateAuthor(request, env) {
+  const body = await readJson(request, 8 * 1024);
+  const name = clean(body.name, { min: 2, max: LIMITS.authorName, label: 'Имя автора' });
+  const avatar = parseAvatar(body.avatar);
+  const bio = optionalText(body.bio, LIMITS.bio, 'Описание');
+  const id = 'a_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  const now = Date.now();
+  try {
+    await env.DB.prepare('INSERT INTO authors (id, name, avatar, bio, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, name, avatar, bio, now, now).run();
+  } catch (e) {
+    if (isUnique(e)) throw new HttpError(409, 'Автор с таким именем уже существует');
+    throw e;
+  }
+  return json({ ok: true, id }, 201);
 }
 
 async function deleteAuthor(env, id) {
@@ -284,16 +291,59 @@ async function deleteAuthor(env, id) {
   return json({ ok: true });
 }
 
+async function setAuthorOwner(request, env, id) {
+  const body = await readJson(request, 1024);
+  if (!(await env.DB.prepare('SELECT id FROM authors WHERE id = ?').bind(id).first())) throw new HttpError(404, 'Автор не найден');
+  if (body.username == null || body.username === '') {
+    await env.DB.prepare('UPDATE authors SET owner_user_id = NULL WHERE id = ?').bind(id).run();
+    return json({ ok: true });
+  }
+  const u = await env.DB.prepare('SELECT id FROM users WHERE username_key = ?').bind(usernameKey(body.username)).first();
+  if (!u) throw new HttpError(404, 'Пользователь не найден');
+  const other = await env.DB.prepare('SELECT id FROM authors WHERE owner_user_id = ? AND id != ?').bind(u.id, id).first();
+  if (other) throw new HttpError(409, 'У этого пользователя уже есть другая карточка автора');
+  await env.DB.prepare('UPDATE authors SET owner_user_id = ? WHERE id = ?').bind(u.id, id).run();
+  return json({ ok: true });
+}
+
+async function findUser(env, username) {
+  const u = await env.DB.prepare('SELECT id FROM users WHERE username_key = ?').bind(usernameKey(username)).first();
+  if (!u) throw new HttpError(404, 'Пользователь не найден');
+  return u;
+}
+
+async function adminUserAction(request, env, username, action) {
+  const u = await findUser(env, username);
+  if (action === 'ban') {
+    const body = await readJson(request, 1024);
+    const banned = body.banned ? 1 : 0;
+    const stmts = [env.DB.prepare('UPDATE users SET banned = ? WHERE id = ?').bind(banned, u.id)];
+    if (banned) stmts.push(env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id));
+    await env.DB.batch(stmts);
+  } else if (action === 'password') {
+    const body = await readJson(request, 1024);
+    const next = validatePassword(body.password);
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(await hashPassword(next, env), u.id),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
+    ]);
+  } else if (action === 'delete') {
+    await env.DB.batch(deleteUserStatements(env, u.id));
+  }
+  return json({ ok: true });
+}
+
 async function exportAll(env) {
   const [authors, reviews] = await Promise.all([
-    env.DB.prepare('SELECT id, name, avatar FROM authors ORDER BY created_at ASC').all(),
-    env.DB.prepare('SELECT * FROM reviews ORDER BY created_at DESC').all(),
+    env.DB.prepare('SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC').all(),
+    env.DB.prepare(`${SELECT_REVIEWS} ORDER BY created_at DESC`).all(),
   ]);
-  return json({ version: 2, exportedAt: new Date().toISOString(), authors: authors.results, reviews: reviews.results.map(rowToReview) });
+  // Аккаунты и пароли в экспорт не попадают.
+  return json({ version: 3, exportedAt: new Date().toISOString(), authors: authors.results.map(rowToAuthor), reviews: reviews.results.map(rowToReview) });
 }
 
 async function importAll(request, env) {
-  const body = await readJson(request, 2 * 1024 * 1024);
+  const body = await readJson(request, 3 * 1024 * 1024);
   // Поддерживается и старый формат (authorsData / reviewsData), и новый (authors / reviews).
   const rawAuthors = Array.isArray(body.authors) ? body.authors : Array.isArray(body.authorsData) ? body.authorsData : [];
   const rawReviews = Array.isArray(body.reviews) ? body.reviews : Array.isArray(body.reviewsData) ? body.reviewsData : [];
@@ -316,6 +366,8 @@ async function importAll(request, env) {
       const name = clean(a.name, { min: 2, max: LIMITS.authorName });
       let avatar = '';
       try { avatar = parseAvatar(a.avatar); } catch { avatar = ''; }
+      let bio = '';
+      try { bio = optionalText(a.bio, LIMITS.bio, 'Описание'); } catch { bio = ''; }
       const key = name.toLowerCase();
       if (byName.has(key)) { idMap.set(a.id, byName.get(key)); continue; }
       const id = typeof a.id === 'string' && ID_RE.test(a.id) && !knownIds.has(a.id) ? a.id : 'a_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
@@ -323,7 +375,7 @@ async function importAll(request, env) {
       knownIds.add(id);
       idMap.set(a.id, id);
       authorsAdded++;
-      statements.push(env.DB.prepare('INSERT INTO authors (id, name, avatar, created_at) VALUES (?, ?, ?, ?)').bind(id, name, avatar, now));
+      statements.push(env.DB.prepare('INSERT INTO authors (id, name, avatar, bio, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, name, avatar, bio, now, now));
     } catch { skipped++; }
   }
 
@@ -334,31 +386,25 @@ async function importAll(request, env) {
       const kind = r.reviewerKind === 'user' ? 'user' : 'ai';
       const reviewerName = kind === 'ai'
         ? (AI_NAMES.includes(r.reviewerName) ? r.reviewerName : r.ai)
-        : clean(r.reviewerName, { min: 2, max: LIMITS.nick });
+        : clean(r.reviewerName, { min: 2, max: 32 });
       if (kind === 'ai' && !AI_NAMES.includes(reviewerName)) throw new Error('bad ai');
       const rawId = r.id == null ? '' : String(r.id);
-      const id = ID_RE.test(rawId) ? rawId : crypto.randomUUID();
       const mapped = idMap.get(r.authorId) || (knownIds.has(r.authorId) ? r.authorId : 'a1');
-      const review = {
-        id,
+      statements.push(bindReview(env, {
+        id: ID_RE.test(rawId) ? rawId : crypto.randomUUID(),
         articleTitle: clean(r.articleTitle, { min: 1, max: LIMITS.article }),
         reviewTitle: clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
-        authorId: mapped,
-        reviewerKind: kind,
-        reviewerName,
+        authorId: mapped, reviewerKind: kind, reviewerName, reviewerUserId: null,
         text: clean(r.text, { min: 1, max: LIMITS.body, multiline: true }),
         criteria: parseCriteria(r.criteria),
         status: r.status === 'pending' ? 'pending' : 'approved',
         createdAt: Number.isFinite(r.createdAt) ? Math.trunc(r.createdAt) : now - i,
-      };
-      statements.push(bindReview(env, review));
+      }));
       reviewsPrepared++;
     } catch { skipped++; }
   });
 
-  for (let i = 0; i < statements.length; i += 80) {
-    await env.DB.batch(statements.slice(i, i + 80));
-  }
+  for (let i = 0; i < statements.length; i += 80) await env.DB.batch(statements.slice(i, i + 80));
   return json({ ok: true, authorsAdded, reviewsProcessed: reviewsPrepared, skipped });
 }
 
@@ -376,40 +422,75 @@ export async function onRequest({ request, env }) {
       if (!origin || origin !== url.origin) throw new HttpError(403, 'Недопустимый источник запроса');
     }
 
+    const needUser = async () => {
+      const u = await getSessionUser(request, env);
+      if (!u) throw new HttpError(401, 'Требуется вход в аккаунт');
+      return u;
+    };
+
     if (path === '/api/config' && method === 'GET') {
-      return json({ turnstileSiteKey: env.TURNSTILE_SECRET && env.TURNSTILE_SITE_KEY ? env.TURNSTILE_SITE_KEY : null, adminEnabled: adminEnabled(env) });
+      return json({
+        turnstileSiteKey: env.TURNSTILE_SECRET && env.TURNSTILE_SITE_KEY ? env.TURNSTILE_SITE_KEY : null,
+        adminEnabled: adminEnabled(env),
+        limits: { body: LIMITS.body, bio: LIMITS.bio },
+      });
     }
-    if (path === '/api/data' && method === 'GET') return json(await getData(env));
-    if (path === '/api/reviews' && method === 'POST') return await createReview(request, env);
+    if (path === '/api/data' && method === 'GET') return json(await getData(env, await isAdmin(request, env)));
 
+    if (path === '/api/register' && method === 'POST') return await register(request, env);
+    if (path === '/api/login' && method === 'POST') return await login(request, env);
+    if (path === '/api/logout' && method === 'POST') return await logout(request, env);
+    if (path === '/api/me' && method === 'GET') return json(await meInfo(env, await getSessionUser(request, env)));
+    if (path === '/api/me/profile' && method === 'POST') return await updateProfile(request, env, await needUser());
+    if (path === '/api/me/password' && method === 'POST') return await changePassword(request, env, await needUser());
+    if (path === '/api/me/delete' && method === 'POST') return await deleteAccount(request, env, await needUser());
+    if (path === '/api/me/reviews' && method === 'GET') {
+      const u = await needUser();
+      const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE reviewer_user_id = ? ORDER BY created_at DESC LIMIT 200`).bind(u.id).all();
+      return json({ reviews: res.results.map(rowToReview) });
+    }
+
+    if (path === '/api/reviews' && method === 'POST') {
+      const [user, admin] = await Promise.all([getSessionUser(request, env), isAdmin(request, env)]);
+      return await createReview(request, env, user, admin);
+    }
+
+    if (path === '/api/authors' && method === 'POST') return await createOwnAuthor(request, env, await needUser());
+    let m = path.match(/^\/api\/authors\/([A-Za-z0-9_-]{1,64})$/);
+    if (m && method === 'POST') {
+      const [user, admin] = await Promise.all([getSessionUser(request, env), isAdmin(request, env)]);
+      if (!user && !admin) throw new HttpError(401, 'Требуется вход в аккаунт');
+      return await updateAuthor(request, env, m[1], user, admin);
+    }
+
+    /* --- вход администратора --- */
     if (path === '/api/admin/me' && method === 'GET') return json({ admin: await isAdmin(request, env) });
-
     if (path === '/api/admin/login' && method === 'POST') {
       if (!adminEnabled(env)) throw new HttpError(503, 'Вход администратора не настроен (ADMIN_PASSWORD)');
-      await rateLimit(env, 'login', await ipHash(request, env), 8, 900);
+      await rateLimit(env, 'admin-login', await ipHash(request, env), 8, 900);
       const body = await readJson(request, 2 * 1024);
       if (typeof body.password !== 'string' || !(await safeEqual(body.password, env.ADMIN_PASSWORD))) {
         throw new HttpError(401, 'Неверный пароль');
       }
-      return json({ ok: true }, 200, { 'Set-Cookie': cookieHeader(await makeSession(env), SESSION_MS / 1000) });
+      const s = await makeAdminSession(env);
+      return json({ ok: true }, 200, { 'Set-Cookie': adminCookie(s.value, s.maxAge) });
     }
-    if (path === '/api/admin/logout' && method === 'POST') {
-      return json({ ok: true }, 200, { 'Set-Cookie': cookieHeader('', 0) });
-    }
+    if (path === '/api/admin/logout' && method === 'POST') return json({ ok: true }, 200, { 'Set-Cookie': adminCookie('', 0) });
 
     if (path.startsWith('/api/admin/')) {
-      await requireAdmin(request, env);
+      if (!(await isAdmin(request, env))) throw new HttpError(401, 'Требуется вход администратора');
 
       if (path === '/api/admin/pending' && method === 'GET') {
-        const res = await env.DB.prepare("SELECT * FROM reviews WHERE status = 'pending' ORDER BY created_at ASC LIMIT 500").all();
+        const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'pending' ORDER BY created_at ASC LIMIT 500`).all();
         return json({ reviews: res.results.map(rowToReview) });
       }
-      if (path === '/api/admin/authors' && method === 'POST') return await createAuthor(request, env);
+      if (path === '/api/admin/authors' && method === 'POST') return await adminCreateAuthor(request, env);
       if (path === '/api/admin/export' && method === 'GET') return await exportAll(env);
       if (path === '/api/admin/import' && method === 'POST') return await importAll(request, env);
 
-      let m = path.match(/^\/api\/admin\/authors\/([A-Za-z0-9_-]{1,64})$/);
-      if (m && method === 'DELETE') return await deleteAuthor(env, m[1]);
+      m = path.match(/^\/api\/admin\/authors\/([A-Za-z0-9_-]{1,64})(\/owner)?$/);
+      if (m && !m[2] && method === 'DELETE') return await deleteAuthor(env, m[1]);
+      if (m && m[2] && method === 'POST') return await setAuthorOwner(request, env, m[1]);
 
       m = path.match(/^\/api\/admin\/reviews\/([A-Za-z0-9_-]{1,64})(\/approve)?$/);
       if (m && m[2] && method === 'POST') {
@@ -422,6 +503,9 @@ export async function onRequest({ request, env }) {
         if (!res.meta.changes) throw new HttpError(404, 'Рецензия не найдена');
         return json({ ok: true });
       }
+
+      m = path.match(/^\/api\/admin\/users\/([^/]{1,64})\/(ban|password|delete)$/);
+      if (m && method === 'POST') return await adminUserAction(request, env, decodeURIComponent(m[1]), m[2]);
     }
 
     throw new HttpError(404, 'Не найдено');
