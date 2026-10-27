@@ -24,9 +24,11 @@ function rowToReview(r) {
     reviewerKind: r.reviewer_kind,
     reviewerName: r.reviewer_name,
     registered: !!r.registered,
-    text: r.body,
-    criteria: [r.c1, r.c2, r.c3, r.c4, r.c_atm],
-    score: r.score,
+    hasReview: r.has_review == null ? true : !!r.has_review,
+    hasScore: r.has_score == null ? true : !!r.has_score,
+    text: r.has_review === 0 ? '' : r.body,
+    criteria: r.has_score === 0 ? null : [r.c1, r.c2, r.c3, r.c4, r.c_atm],
+    score: r.has_score === 0 ? null : r.score,
     status: r.status,
     createdAt: r.created_at,
   };
@@ -55,14 +57,14 @@ const rowToUser = (u) => ({
 const SELECT_REVIEWS = 'SELECT *, (reviewer_user_id IS NOT NULL) AS registered FROM reviews';
 
 const INSERT_REVIEW =
-  'INSERT OR IGNORE INTO reviews (id, article_title, review_title, author_id, reviewer_kind, reviewer_name, reviewer_user_id, body, c1, c2, c3, c4, c_atm, score, status, created_at) ' +
-  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+  'INSERT OR IGNORE INTO reviews (id, article_title, review_title, author_id, reviewer_kind, reviewer_name, reviewer_user_id, body, c1, c2, c3, c4, c_atm, score, has_review, has_score, status, created_at) ' +
+  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
 function bindReview(env, r) {
   const c = r.criteria;
   return env.DB.prepare(INSERT_REVIEW).bind(
     r.id, r.articleTitle, r.reviewTitle, r.authorId, r.reviewerKind, r.reviewerName, r.reviewerUserId || null, r.text,
-    c[0], c[1], c[2], c[3], c[4], calcScore(c), r.status, r.createdAt,
+    c[0], c[1], c[2], c[3], c[4], calcScore(c), r.hasReview === false ? 0 : 1, r.hasScore === false ? 0 : 1, r.status, r.createdAt,
   );
 }
 
@@ -290,10 +292,13 @@ async function createReview(request, env, user, admin) {
     if (pending && pending.n >= 300) throw new HttpError(503, 'Очередь модерации переполнена, попробуйте позже');
   }
 
+  const hasReview = body.hasReview !== false;
+  const hasScore = body.hasScore !== false;
+  if (!hasReview && !hasScore) throw new HttpError(400, 'Выберите рецензию, оценку или оба варианта');
   let articleTitle = clean(body.articleTitle, { min: 2, max: LIMITS.article, label: 'Название статьи' });
-  const reviewTitle = clean(body.reviewTitle, { min: 2, max: LIMITS.title, label: 'Заголовок рецензии' });
-  const text = clean(body.text, { min: LIMITS.minBody, max: LIMITS.body, multiline: true, label: 'Текст рецензии' });
-  const criteria = parseCriteria(body.criteria);
+  const reviewTitle = hasReview ? clean(body.reviewTitle, { min: 2, max: LIMITS.title, label: 'Заголовок рецензии' }) : '';
+  const text = hasReview ? clean(body.text, { min: LIMITS.minBody, max: LIMITS.body, multiline: true, label: 'Текст рецензии' }) : '';
+  const criteria = hasScore ? parseCriteria(body.criteria) : [5, 5, 5, 5, 5];
 
   if (typeof body.authorId !== 'string' || !ID_RE.test(body.authorId)) throw new HttpError(400, 'Выберите автора статьи');
   let authorId = body.authorId;
@@ -304,7 +309,7 @@ async function createReview(request, env, user, admin) {
   if (existing) { articleTitle = existing.article_title; authorId = existing.author_id; }
 
   const review = {
-    id: crypto.randomUUID(), articleTitle, reviewTitle, authorId, reviewerKind, reviewerName, reviewerUserId, text, criteria,
+    id: crypto.randomUUID(), articleTitle, reviewTitle, authorId, reviewerKind, reviewerName, reviewerUserId, text, criteria, hasReview, hasScore,
     status: admin ? 'approved' : 'pending', createdAt: Date.now(),
   };
   await bindReview(env, review).run();
@@ -484,8 +489,10 @@ async function importAll(request, env) {
         articleTitle: clean(r.articleTitle, { min: 1, max: LIMITS.article }),
         reviewTitle: clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
         authorId: mapped, reviewerKind: kind, reviewerName, reviewerUserId: null,
-        text: clean(r.text, { min: 1, max: LIMITS.body, multiline: true }),
-        criteria: parseCriteria(r.criteria),
+        text: clean(r.text || '', { min: r.hasReview === false ? 0 : 1, max: LIMITS.body, multiline: true }),
+        criteria: r.hasScore === false ? [5, 5, 5, 5, 5] : parseCriteria(r.criteria),
+        hasReview: r.hasReview !== false, hasScore: r.hasScore !== false,
+        reviewTitle: r.hasReview === false ? '' : clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
         status: r.status === 'pending' ? 'pending' : 'approved',
         createdAt: Number.isFinite(r.createdAt) ? Math.trunc(r.createdAt) : now - i,
       }));
