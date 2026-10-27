@@ -459,8 +459,9 @@
             <h2 class="panel-title"><span>👤 Мой профиль</span><a class="btn btn-outline" id="profileViewLink" href="#/users">Как видят другие</a></h2>
             <form id="profileForm">
               <div class="row-gap mb-12"><div id="profileAvatarPreview"></div><div><div class="bold" id="profileUsername"></div><div class="muted small" id="profileSince"></div></div></div>
-              <label class="field-label" for="profileAvatar">Ссылка на аватар (https, необязательно)</label>
-              <input type="url" id="profileAvatar" class="input-field" maxlength="300" placeholder="https://…">
+              <label class="field-label" for="profileAvatarFile">Аватарка</label>
+              <input type="file" id="profileAvatarFile" class="input-field" accept="image/png,image/jpeg,image/webp">
+              <p class="muted tiny mb-12">Выберите изображение PNG, JPG или WebP размером до 2 МБ. Предпросмотр появится сразу; чтобы сохранить аватарку, нажмите кнопку ниже.</p>
               <label class="field-label" for="profileBio">О себе</label>
               <textarea id="profileBio" class="input-field" rows="4" maxlength="600" placeholder="Расскажите о себе и своих вкусах…"></textarea>
               <div class="row-between"><span class="muted tiny" id="profileBioCounter">0 / 600</span><button type="submit" class="btn btn-purple">Сохранить профиль</button></div>
