@@ -76,7 +76,9 @@
   const cnt = (n, forms) => `${n} ${plural(n, forms)}`;
   const F_REV = ['рецензия', 'рецензии', 'рецензий'];
   const F_ART = ['статья', 'статьи', 'статей'];
-  const avg = (list) => (list.length ? list.reduce((s, r) => s + r.score, 0) / list.length : 0);
+  const scored = (list) => list.filter((r) => r.hasScore !== false && Number.isFinite(r.score));
+  const reviewed = (list) => list.filter((r) => r.hasReview !== false);
+  const avg = (list) => { const scores = scored(list); return scores.length ? scores.reduce((s, r) => s + r.score, 0) / scores.length : 0; };
   const fmtDate = (ts) => new Date(ts).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' });
   const fmtDay = (ts) => new Date(ts).toLocaleDateString('ru-RU', { dateStyle: 'long' });
   const calcScore = (c) => Math.min(90, Math.round((c[0] + c[1] + c[2] + c[3]) * 1.4 * ATM[c[4]]));
@@ -128,9 +130,10 @@
       if (!arts.has(key)) arts.set(key, { title: r.articleTitle, authorId: r.authorId, reviews: [] });
       arts.get(key).reviews.push(r);
     }
-    idx.articles = [...arts.values()].map((a) => ({
-      ...a, avg: avg(a.reviews), max: Math.max(...a.reviews.map((r) => r.score)), latest: Math.max(...a.reviews.map((r) => r.createdAt)),
-    }));
+    idx.articles = [...arts.values()].map((a) => {
+      const scores = scored(a.reviews);
+      return { ...a, avg: avg(scores), max: scores.length ? Math.max(...scores.map((r) => r.score)) : 0, latest: Math.max(...a.reviews.map((r) => r.createdAt)) };
+    });
     state.idx = idx;
   }
 
@@ -154,8 +157,9 @@
 
   /* ---------- карточки ---------- */
   function authorCard(a) {
-    const rs = authorReviews(a.id);
-    const average = avg(rs);
+    const all = authorReviews(a.id);
+    const rs = reviewed(all);
+    const average = avg(all);
     return h('a', { class: 'entity-card', href: authorHref(a.id) },
       banner(a.name),
       h('div', { class: 'ec-body' },
@@ -167,7 +171,8 @@
   }
 
   function userCard(u) {
-    const rs = userReviews(u.username);
+    const all = userReviews(u.username);
+    const rs = reviewed(all);
     const own = authorOfUser(u.username);
     return h('a', { class: 'entity-card', href: userHref(u.username) },
       banner(u.username),
@@ -181,14 +186,16 @@
 
   function articleCard(art) {
     const author = state.idx.authors.get(art.authorId);
+    const reviewCount = reviewed(art.reviews).length;
+    const scoreCount = scored(art.reviews).length;
     return h('a', { class: 'article-card', href: articleHref(art.title) },
       scoreRing(art.avg),
       h('div', { class: 'ac-main' },
         h('div', { class: 'ac-title' }, art.title),
         h('div', { class: 'ac-meta' }, 'Автор: ', author ? author.name : 'Неизвестный'),
         h('div', { class: 'ac-chips' },
-          h('span', { class: 'chip' }, cnt(art.reviews.length, F_REV)),
-          h('span', { class: 'chip' }, `макс. ${art.max}`),
+          h('span', { class: 'chip' }, cnt(reviewCount, F_REV)),
+          h('span', { class: 'chip' }, scoreCount ? `макс. ${art.max}` : 'нет оценок'),
           h('span', { class: 'chip' }, fmtDay(art.latest)))));
   }
 
@@ -245,8 +252,11 @@
       if (moderation) actions.push(h('button', { type: 'button', class: 'btn btn-ok', onclick: () => moderate(r.id, 'approve') }, '✓ Одобрить'));
       actions.push(h('button', { type: 'button', class: 'btn btn-danger btn-outline', onclick: () => moderate(r.id, 'delete') }, '🗑 Удалить'));
     }
-    const long = r.text.length > 700;
-    const text = h('div', { class: 'review-text' + (long ? ' clamped' : '') }, r.text);
+    const hasReview = r.hasReview !== false;
+    const hasScore = r.hasScore !== false;
+    const reviewText = hasReview ? r.text : 'Пользователь поставил оценку без текстовой рецензии.';
+    const long = hasReview && r.text.length > 700;
+    const text = h('div', { class: 'review-text' + (long ? ' clamped' : '') + (!hasReview ? ' muted' : '') }, reviewText);
     const more = long ? h('button', { type: 'button', class: 'link-btn', onclick: (e) => {
       const c = text.classList.toggle('clamped');
       e.currentTarget.textContent = c ? 'Показать полностью' : 'Свернуть';
@@ -254,13 +264,14 @@
     return h('article', { class: 'review-card', id: `review-${r.id}` },
       h('div', { class: 'review-top-bar' },
         h('div', null,
-          h('h3', { class: 'review-main-title' }, r.reviewTitle),
+          h('h3', { class: 'review-main-title' }, hasReview ? r.reviewTitle : 'Оценка без рецензии'),
           h('div', { class: 'review-meta' },
             h('a', { class: 'review-article-title', href: articleHref(r.articleTitle) }, 'Статья: ', h('strong', null, r.articleTitle)),
             h('a', { class: 'review-article-title', href: authorHref(r.authorId) }, 'Автор: ' + author.name))),
-        h('div', { class: 'score-breakdown-box' },
+        hasScore ? h('div', { class: 'score-breakdown-box' },
           h('div', { class: 'score-total-display' }, String(r.score), h('span', { class: 'muted small' }, ' / 90')),
-          h('div', { class: 'score-criteria-display', title: 'Критерии' }, r.criteria.join(' ')))),
+          h('div', { class: 'score-criteria-display', title: 'Критерии' }, r.criteria.join(' ')))
+          : h('div', { class: 'review-no-score muted small' }, 'Без оценки')),
       h('div', { class: 'row-gap' }, reviewerTag(r),
         showStatus ? h('span', { class: `chip ${r.status === 'approved' ? 'chip-ok' : 'chip-warn'}` }, r.status === 'approved' ? '✓ Опубликовано' : '⏳ На модерации') : null),
       text, more,
@@ -290,8 +301,11 @@
     const hero = $('#heroContainer');
     hero.replaceChildren();
     const rs = state.reviews;
-    if (rs.length) {
-      const top = [...rs].sort((a, b) => b.score - a.score || b.createdAt - a.createdAt)[0];
+    const reviewItems = reviewed(rs);
+    const scoreItems = scored(rs);
+    const featured = scoreItems.filter((r) => r.hasReview !== false);
+    if (featured.length) {
+      const top = [...featured].sort((a, b) => b.score - a.score || b.createdAt - a.createdAt)[0];
       const author = state.idx.authors.get(top.authorId) || { name: 'Неизвестный' };
       hero.append(h('a', { class: 'hero-featured', href: articleHref(top.articleTitle) },
         h('div', { class: 'hero-badge' }, '🏆 Топ-1 статья портала'),
@@ -299,12 +313,12 @@
         h('div', { class: 'hero-meta' }, 'Автор: ', h('strong', null, author.name), ' • Оценка: ', h('strong', { class: 'gold' }, `${top.score} / 90`)),
         h('div', { class: 'hero-quote' }, '«' + top.text.slice(0, 300) + '»')));
     }
-    $('#statTotalReviews').textContent = String(rs.length);
-    $('#statAvgScore').textContent = `${avg(rs).toFixed(1)} / 90`;
+    $('#statTotalReviews').textContent = String(reviewItems.length);
+    $('#statAvgScore').textContent = scoreItems.length ? `${avg(scoreItems).toFixed(1)} / 90` : '—';
     $('#statArticles').textContent = String(state.idx.articles.length);
     $('#statUsers').textContent = String(state.users.length);
 
-    const tops = state.authors.map((a) => ({ a, n: authorReviews(a.id).length })).filter((x) => x.n > 0).sort((x, y) => y.n - x.n).slice(0, 5);
+    const tops = state.authors.map((a) => ({ a, n: reviewed(authorReviews(a.id)).length })).filter((x) => x.n > 0).sort((x, y) => y.n - x.n).slice(0, 5);
     $('#homeTopAuthorsList').replaceChildren(...(tops.length
       ? tops.map(({ a, n }) => h('div', { class: 'top-author-row' },
         h('a', { class: 'row-gap', href: authorHref(a.id) }, avatar(a.name, a.avatar, 'avatar-xs'), a.name),
@@ -327,7 +341,7 @@
     const sort = $('#articlesSort').value;
     let list = state.idx.articles.filter((a) => !q || norm(a.title).includes(q));
     const by = {
-      rating: (a, b) => b.avg - a.avg, reviews: (a, b) => b.reviews.length - a.reviews.length,
+      rating: (a, b) => b.avg - a.avg, reviews: (a, b) => reviewed(b.reviews).length - reviewed(a.reviews).length,
       new: (a, b) => b.latest - a.latest, name: (a, b) => a.title.localeCompare(b.title, 'ru'),
     };
     list = list.sort(by[sort] || by.rating);
@@ -347,9 +361,11 @@
     const sort = $('#articleReviewsSortSelect').value;
     const rs = [...article.reviews];
     if (sort === 'oldest') rs.sort((a, b) => a.createdAt - b.createdAt);
-    else if (sort === 'highest') rs.sort((a, b) => b.score - a.score);
-    else if (sort === 'lowest') rs.sort((a, b) => a.score - b.score);
+    else if (sort === 'highest') rs.sort((a, b) => (b.hasScore === false ? -1 : b.score) - (a.hasScore === false ? -1 : a.score));
+    else if (sort === 'lowest') rs.sort((a, b) => (a.hasScore === false ? Infinity : a.score) - (b.hasScore === false ? Infinity : b.score));
     else rs.sort((a, b) => b.createdAt - a.createdAt);
+    const scoreReviews = scored(rs);
+    const reviewCount = reviewed(rs).length;
 
     const author = state.idx.authors.get(article.authorId) || { id: 'a1', name: 'Неизвестный автор' };
     head.replaceChildren(h('div', { class: 'rzt-card' },
@@ -358,7 +374,7 @@
         h('div', { class: 'rzt-tags' }, h('span', { class: 'rzt-tag' }, '📄 Статья вики'), h('span', { class: 'rzt-tag rzt-tag-accent' }, 'Закулисье')),
         h('h2', { class: 'rzt-title' }, article.title),
         h('a', { class: 'row-gap author-inline', href: authorHref(author.id) }, avatar(author.name, author.avatar, 'avatar-xs'), 'Автор: ', h('strong', null, author.name)),
-        statsRow([[article.reviews.length, 'Рецензий'], [Math.round(article.avg), 'Ср. балл'], [article.max, 'Макс. балл'], [Math.min(...article.reviews.map((r) => r.score)), 'Мин. балл']], 'inline-stats'))));
+        statsRow([[reviewCount, 'Рецензий'], [scoreReviews.length ? Math.round(article.avg) : '—', 'Ср. балл'], [scoreReviews.length ? article.max : '—', 'Макс. балл'], [scoreReviews.length ? Math.min(...scoreReviews.map((r) => r.score)) : '—', 'Мин. балл']], 'inline-stats'))));
     list.replaceChildren(...rs.map((r) => reviewCard(r)));
     document.title = `${article.title} — рецензии | Закулисье Майнкрафта Вики`;
   }
@@ -406,7 +422,8 @@
     const box = $('#authorPage');
     const a = state.idx.authors.get(id);
     if (!a) { box.replaceChildren(h('div', { class: 'panel' }, emptyBox(state.loaded ? 'Автор не найден.' : 'Загрузка…'))); return; }
-    const rs = authorReviews(a.id);
+    const all = authorReviews(a.id);
+    const rs = reviewed(all);
     const owner = a.ownerUsername && state.idx.users.get(lc(a.ownerUsername));
     const actions = [];
     if (canEditAuthor(a)) actions.push(h('button', { type: 'button', class: 'btn btn-purple', onclick: () => { state.editingAuthor = a.id; route(); } }, '✏️ Редактировать'));
@@ -421,8 +438,8 @@
     if (owner) lines.push(h('span', null, 'Аккаунт: ', h('a', { href: userHref(owner.username) }, owner.username)));
     lines.push(a.updatedAt ? `Карточка обновлена ${fmtDay(a.updatedAt)}` : '');
     const body = [profileHero({
-      name: a.name, avatarUrl: a.avatar, badge: authorBadge(rs.length, avg(rs)), lines: lines.filter(Boolean), bio: a.bio, actions,
-      stats: [[uniqueTitles(rs), 'Статей'], [rs.length, 'Рецензий'], [rs.length ? avg(rs).toFixed(1) : '—', 'Ср. балл'], [rs.length ? Math.max(...rs.map((r) => r.score)) : '—', 'Лучший балл']],
+      name: a.name, avatarUrl: a.avatar, badge: authorBadge(rs.length, avg(all)), lines: lines.filter(Boolean), bio: a.bio, actions,
+      stats: [[uniqueTitles(all), 'Статей'], [rs.length, 'Рецензий'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. балл'], [scored(all).length ? Math.max(...scored(all).map((r) => r.score)) : '—', 'Лучший балл']],
     })];
     if (state.editingAuthor === a.id && canEditAuthor(a)) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '✏️ Редактирование карточки'), authorEditForm(a)));
 
@@ -489,7 +506,8 @@
     const box = $('#userPage');
     const u = state.idx.users.get(lc(username));
     if (!u) { box.replaceChildren(h('div', { class: 'panel' }, emptyBox(state.loaded ? 'Пользователь не найден.' : 'Загрузка…'))); return; }
-    const rs = userReviews(u.username);
+    const all = userReviews(u.username);
+    const rs = reviewed(all);
     const own = authorOfUser(u.username);
     const actions = [];
     if (state.me && lc(state.me.username) === lc(u.username)) actions.push(h('a', { class: 'btn btn-purple', href: '#/profile' }, '✏️ Редактировать профиль'));
@@ -503,7 +521,7 @@
     if (u.banned) lines.push('⛔ Аккаунт заблокирован');
     const body = [profileHero({
       name: u.username, avatarUrl: u.avatar, badge: userBadge(rs.length), lines, bio: u.bio, actions,
-      stats: [[rs.length, 'Рецензий'], [uniqueTitles(rs), 'Статей'], [rs.length ? avg(rs).toFixed(1) : '—', 'Ср. оценка'], [rs.length ? Math.max(...rs.map((r) => r.score)) : '—', 'Макс. оценка']],
+      stats: [[rs.length, 'Рецензий'], [uniqueTitles(all), 'Статей'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. оценка'], [scored(all).length ? Math.max(...scored(all).map((r) => r.score)) : '—', 'Макс. оценка']],
     })];
     const socialNode = socialLinksNode(u.socialLinks);
     if (socialNode) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '🔗 Ссылки'), socialNode));
@@ -535,7 +553,7 @@
     const arts = state.idx.articles.filter((a) => norm(a.title).includes(query));
     const auths = state.authors.filter((a) => norm(a.name + ' ' + a.bio).includes(query));
     const usrs = state.users.filter((u) => norm(u.username + ' ' + u.bio).includes(query));
-    const revs = state.reviews.filter((r) => norm(r.reviewTitle).includes(query)).slice(0, 10);
+    const revs = state.reviews.filter((r) => r.hasReview !== false && norm(r.reviewTitle).includes(query)).slice(0, 10);
     const group = (title, items, gridCls, mapFn) => items.length ? h('section', { class: 'result-group' }, h('h3', { class: 'section-title mb-10' }, `${title} (${items.length})`), h('div', { class: gridCls }, items.map(mapFn))) : null;
     const parts = [
       group('📚 Статьи', arts, 'article-grid', articleCard),
@@ -551,7 +569,7 @@
     if (!sel.options.length) sel.append(...AI_NAMES.map((n) => h('option', { value: n }, n)), h('option', { value: USERS_KEY }, '👤 Пользователи'));
     const key = sel.value || AI_NAMES[0];
     const isUsers = key === USERS_KEY;
-    const list = state.reviews.filter((r) => (isUsers ? r.reviewerKind === 'user' : r.reviewerKind === 'ai' && r.reviewerName === key));
+    const list = state.reviews.filter((r) => r.hasReview !== false && (isUsers ? r.reviewerKind === 'user' : r.reviewerKind === 'ai' && r.reviewerName === key));
     const icon = h('div', null);
     if (!isUsers && Object.hasOwn(AI_ICONS, key)) icon.innerHTML = AI_ICONS[key]; // константа из этого файла
     $('#aiProfileContent').replaceChildren(
