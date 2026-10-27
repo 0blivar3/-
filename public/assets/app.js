@@ -189,7 +189,7 @@
     const reviewCount = reviewed(art.reviews).length;
     const scoreCount = scored(art.reviews).length;
     return h('a', { class: 'article-card', href: articleHref(art.title) },
-      scoreRing(art.avg),
+      scoreCount ? scoreRing(art.avg) : h('div', { class: 'score-ring score-ring-empty', title: 'Пока нет оценок' }, h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/90')),
       h('div', { class: 'ac-main' },
         h('div', { class: 'ac-title' }, art.title),
         h('div', { class: 'ac-meta' }, 'Автор: ', author ? author.name : 'Неизвестный'),
