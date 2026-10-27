@@ -215,9 +215,32 @@
     return tag;
   }
 
+  async function copyReviewLink(id) {
+    const url = `${location.origin}${location.pathname}#/review/${encodeURIComponent(id)}`;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = h('textarea', { class: 'sr-only', readonly: true });
+        input.value = url;
+        document.body.append(input);
+        input.select();
+        const copied = document.execCommand('copy');
+        input.remove();
+        if (!copied) throw new Error('Не удалось скопировать ссылку');
+      }
+      toast('Ссылка на рецензию скопирована', 'ok');
+    } catch {
+      toast('Не удалось скопировать ссылку. Попробуйте скопировать адрес вручную.', 'error');
+    }
+  }
+
   function reviewCard(r, { moderation = false, showStatus = false } = {}) {
     const author = state.idx.authors.get(r.authorId) || { name: 'Неизвестный автор' };
     const actions = [];
+    if (r.status === 'approved') {
+      actions.push(h('button', { type: 'button', class: 'btn btn-outline', onclick: () => copyReviewLink(r.id) }, '🔗 Копировать ссылку'));
+    }
     if (state.admin) {
       if (moderation) actions.push(h('button', { type: 'button', class: 'btn btn-ok', onclick: () => moderate(r.id, 'approve') }, '✓ Одобрить'));
       actions.push(h('button', { type: 'button', class: 'btn btn-danger btn-outline', onclick: () => moderate(r.id, 'delete') }, '🗑 Удалить'));
@@ -228,7 +251,7 @@
       const c = text.classList.toggle('clamped');
       e.currentTarget.textContent = c ? 'Показать полностью' : 'Свернуть';
     } }, 'Показать полностью') : null;
-    return h('article', { class: 'review-card' },
+    return h('article', { class: 'review-card', id: `review-${r.id}` },
       h('div', { class: 'review-top-bar' },
         h('div', null,
           h('h3', { class: 'review-main-title' }, r.reviewTitle),
@@ -527,7 +550,7 @@
     $('#profileUsername').textContent = me.username;
     $('#profileSince').textContent = `На сайте с ${fmtDay(me.createdAt)}`;
     $('#profileViewLink').href = userHref(me.username);
-    $('#profileAvatar').value = me.avatar || '';
+    $('#profileAvatarFile').value = '';
     $('#profileBio').value = me.bio || '';
     $('#profileBio').maxLength = lim.bio;
     $('#profileBioCounter').textContent = `${[...me.bio || ''].length} / ${lim.bio}`;
@@ -554,8 +577,20 @@
     if (!state.idx) return;
     const raw = location.hash.replace(/^#\/?/, '');
     const [nameRaw, ...rest] = raw.split('/');
-    let name = Object.hasOwn(TITLES, nameRaw) ? nameRaw : 'home';
-    const param = rest.length ? safeDecode(rest.join('/')) : null;
+    let name = Object.hasOwn(TITLES, nameRaw) || nameRaw === 'review' ? nameRaw : 'home';
+    let param = rest.length ? safeDecode(rest.join('/')) : null;
+    let focusReviewId = null;
+    if (name === 'review') {
+      const targetReview = state.reviews.find((r) => r.id === param);
+      if (targetReview) {
+        focusReviewId = targetReview.id;
+        param = targetReview.articleTitle;
+        name = 'article';
+      } else {
+        name = 'home';
+        param = null;
+      }
+    }
     if (name === 'authors' && param) name = 'author';
     if (name === 'users' && param) name = 'user';
     if (name === 'article' && !param) name = 'articles';
@@ -573,7 +608,17 @@
 
     if (name === 'home') renderHome();
     if (name === 'articles') renderArticlesList();
-    if (name === 'article') renderArticle(param);
+    if (name === 'article') {
+      renderArticle(param);
+      if (focusReviewId) requestAnimationFrame(() => {
+        const target = document.getElementById(`review-${focusReviewId}`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('review-link-target');
+          setTimeout(() => target.classList.remove('review-link-target'), 2400);
+        }
+      });
+    }
     if (name === 'authors') renderAuthorsList();
     if (name === 'author') renderAuthorPage(param);
     if (name === 'users') renderUsersList();
@@ -756,18 +801,39 @@
 
   /* ---------- профиль ---------- */
   function initProfile() {
+    let selectedAvatarFile = null;
+    let previewObjectUrl = null;
     $('#profileBio').addEventListener('input', () => { $('#profileBioCounter').textContent = `${[...$('#profileBio').value].length} / ${limits().bio}`; });
-    $('#profileAvatar').addEventListener('input', () => {
-      const v = $('#profileAvatar').value.trim();
-      $('#profileAvatarPreview').replaceChildren(avatar(state.me ? state.me.username : '?', /^https:\/\//.test(v) ? v : '', 'avatar-xl'));
+    $('#profileAvatarFile').addEventListener('change', () => {
+      selectedAvatarFile = $('#profileAvatarFile').files[0] || null;
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      previewObjectUrl = selectedAvatarFile ? URL.createObjectURL(selectedAvatarFile) : null;
+      $('#profileAvatarPreview').replaceChildren(avatar(
+        state.me ? state.me.username : '?',
+        previewObjectUrl || (state.me && state.me.avatar) || '',
+        'avatar-xl',
+      ));
     });
     $('#profileForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const btn = e.currentTarget.querySelector('button[type="submit"]');
+      btn.disabled = true;
       try {
-        await api('/me/profile', { method: 'POST', body: { avatar: $('#profileAvatar').value.trim(), bio: $('#profileBio').value } });
+        if (selectedAvatarFile) {
+          const formData = new FormData();
+          formData.append('avatar', selectedAvatarFile);
+          const res = await fetch('/api/me/avatar', { method: 'POST', credentials: 'same-origin', body: formData });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+          selectedAvatarFile = null;
+          if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = null;
+        }
+        await api('/me/profile', { method: 'POST', body: { bio: $('#profileBio').value } });
         toast('Профиль сохранён', 'ok');
         await refreshAll();
       } catch (err) { toast(err.message, 'error'); }
+      finally { btn.disabled = false; }
     });
     $('#passwordForm').addEventListener('submit', async (e) => {
       e.preventDefault();
