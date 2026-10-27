@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS reviews (
   c4               INTEGER NOT NULL CHECK (c4 BETWEEN 1 AND 10),
   c_atm            INTEGER NOT NULL CHECK (c_atm BETWEEN 1 AND 10),
   score            INTEGER NOT NULL CHECK (score BETWEEN 1 AND 90),
+  has_review       INTEGER NOT NULL DEFAULT 1 CHECK (has_review IN (0, 1)),
+  has_score        INTEGER NOT NULL DEFAULT 1 CHECK (has_score IN (0, 1)),
   status           TEXT NOT NULL CHECK (status IN ('pending', 'approved')),
   created_at       INTEGER NOT NULL
 );

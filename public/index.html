@@ -19,11 +19,11 @@
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.2.2">
+  <link rel="stylesheet" href="/assets/style.css?v=2.2.3">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
-  <script src="/assets/app.js?v=2.2.2" defer></script>
+  <script src="/assets/app.js?v=2.2.3" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">К содержимому</a>
@@ -247,6 +247,15 @@
     <section id="tab-evaluator" class="tab-content" aria-label="Оценить статью">
       <div class="wrap">
         <form id="reviewForm" class="rzt-eval-box mb-20" novalidate>
+          <div class="submission-mode-field">
+            <label class="field-label" for="submissionType">Что хотите отправить?</label>
+            <select id="submissionType" class="input-field">
+              <option value="both">Оценка и рецензия</option>
+              <option value="rating">Только оценка — без рецензии</option>
+              <option value="review">Только рецензия — без оценки</option>
+            </select>
+          </div>
+          <div id="scoreFields">
           <div class="rzt-grid-4">
             <div class="rzt-slider-item">
               <div class="rzt-slider-header"><label for="c1">Текст / Понятность</label><output class="rzt-slider-val" id="val1" for="c1">5</output></div>
@@ -273,6 +282,7 @@
             </div>
             <input type="range" id="cAtm" class="crit" min="1" max="10" value="5">
           </div>
+          </div>
 
           <div class="meta-inputs-row">
             <div>
@@ -280,7 +290,7 @@
               <input type="text" id="articleTitle" class="input-field" list="articleList" maxlength="150" minlength="2" required placeholder="Уровень 0 - «Старые коридоры»" autocomplete="off">
               <datalist id="articleList"></datalist>
             </div>
-            <div>
+            <div id="reviewTitleField">
               <label class="field-label" for="reviewTitle">Заголовок рецензии:</label>
               <input type="text" id="reviewTitle" class="input-field" maxlength="120" minlength="2" required placeholder="Превосходная атмосфера" autocomplete="off">
             </div>
@@ -302,9 +312,11 @@
           </div>
           <div id="loginPrompt" class="notice" hidden>Чтобы отправить рецензию, <button type="button" class="link-btn" id="loginPromptBtn">войдите в аккаунт</button> или зарегистрируйтесь.</div>
 
-          <label class="sr-only" for="reviewText">Текст рецензии</label>
-          <textarea id="reviewText" rows="6" maxlength="10000" minlength="20" required placeholder="Введите развёрнутый текст вашей рецензии (от 20 символов)…"></textarea>
-          <div class="muted tiny text-right"><span id="textCounter">0</span> / <span id="textMax">10000</span></div>
+          <div id="reviewTextField">
+            <label class="sr-only" for="reviewText">Текст рецензии</label>
+            <textarea id="reviewText" rows="6" maxlength="10000" minlength="20" required placeholder="Введите развёрнутый текст вашей рецензии (от 20 символов)…"></textarea>
+            <div class="muted tiny text-right"><span id="textCounter">0</span> / <span id="textMax">10000</span></div>
+          </div>
 
           <p class="muted small" id="moderationNote">Рецензии публикуются после проверки модератором.</p>
 
@@ -314,11 +326,11 @@
               <button type="button" class="rzt-btn-action" id="criteriaOpenBtn">ⓘ Критерии 90-балльной системы</button>
             </div>
             <div class="rzt-submit-box">
-              <div class="text-right" aria-live="polite">
+              <div class="text-right" id="scorePreview" aria-live="polite">
                 <span class="rzt-score-big" id="finalScore">45</span>
                 <span class="rzt-score-small" id="maxScoreLabel">/ 90</span>
               </div>
-              <button type="submit" class="rzt-publish-btn" id="submitBtn" title="Отправить рецензию" aria-label="Отправить рецензию">✓</button>
+              <button type="submit" class="rzt-publish-btn" id="submitBtn" title="Отправить" aria-label="Отправить оценку или рецензию">✓</button>
             </div>
           </div>
         </form>
@@ -346,7 +358,7 @@
       <div class="wrap wrap-1100">
         <div id="articleHeaderCard"></div>
         <div class="row-between mt-15 mb-10">
-          <h2 class="section-title">Все рецензии на эту статью:</h2>
+          <h2 class="section-title">Рецензии и оценки на эту статью:</h2>
           <label class="sr-only" for="articleReviewsSortSelect">Сортировка</label>
           <select id="articleReviewsSortSelect" class="input-field input-auto no-mb">
             <option value="newest">Сначала новые</option>
@@ -496,7 +508,7 @@
             </form>
           </div>
           <div class="panel">
-            <h2 class="panel-title">💬 Мои рецензии</h2>
+            <h2 class="panel-title">💬 Мои рецензии и оценки</h2>
             <div id="myReviewsList"></div>
           </div>
           <div class="panel">
@@ -548,7 +560,7 @@
     <section id="tab-moderation" class="tab-content" aria-label="Модерация">
       <div class="wrap wrap-1100">
         <div class="panel">
-          <h2 class="panel-title">🛡 Рецензии на модерации</h2>
+          <h2 class="panel-title">🛡 Рецензии и оценки на модерации</h2>
           <div id="moderationList"></div>
         </div>
       </div>

@@ -347,6 +347,13 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
 .author-inline { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }
 .author-inline:hover strong { text-decoration: underline; }
 
+/* Независимые оценки и рецензии */
+.submission-mode-field { margin-bottom: 16px; max-width: 520px; }
+#scoreFields[hidden], #reviewTitleField[hidden], #reviewTextField[hidden], #scorePreview[hidden] { display: none !important; }
+.score-ring-empty { opacity: 0.65; }
+.review-no-score { min-width: 72px; text-align: center; align-self: center; }
+@media (max-width: 640px) { .submission-mode-field { max-width: none; } }
+
 /* Социальные ссылки, избранное и окно критериев */
 .profile-social-grid, .profile-favorites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
 .profile-favorites-grid select { min-height: 140px; }
