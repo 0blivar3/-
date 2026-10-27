@@ -445,7 +445,11 @@
     if (state.editingAuthor === a.id && canEditAuthor(a)) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '✏️ Редактирование карточки'), authorEditForm(a)));
 
     const groups = new Map();
-    all.forEach((r) => { const k = lc(r.articleTitle); if (!groups.has(k)) groups.set(k, []).push(r); });
+    all.forEach((r) => {
+      const k = lc(r.articleTitle);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    });
     const content = state.authorTab === 'articles'
       ? (groups.size ? h('div', { class: 'article-grid' }, state.idx.articles.filter((x) => groups.has(lc(x.title))).sort((x, y) => y.avg - x.avg).map(articleCard)) : emptyBox('Статей пока нет.'))
       : h('div', null, all.length ? all.map((r) => reviewCard(r)) : emptyBox('Рецензий и оценок пока нет.'));
