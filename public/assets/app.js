@@ -1016,6 +1016,25 @@
   const criteria = () => critEls().map((el) => parseInt(el.value, 10));
   const textLen = () => [...$('#reviewText').value].length;
 
+  function updateSubmissionMode() {
+    const mode = $('#submissionType').value;
+    const hasReview = mode !== 'rating';
+    const hasScore = mode !== 'review';
+    $('#scoreFields').hidden = !hasScore;
+    $('#reviewTitleField').hidden = !hasReview;
+    $('#reviewTextField').hidden = !hasReview;
+    $('#reviewTitle').required = hasReview;
+    $('#reviewText').required = hasReview;
+    $('#scorePreview').hidden = !hasScore;
+    $('#submitBtn').title = mode === 'rating' ? 'Отправить оценку' : mode === 'review' ? 'Отправить рецензию' : 'Отправить оценку и рецензию';
+    $('#submitBtn').setAttribute('aria-label', $('#submitBtn').title);
+    $('#moderationNote').textContent = mode === 'rating'
+      ? 'Оценки публикуются после проверки модератором.'
+      : mode === 'review'
+        ? 'Рецензии без оценки публикуются после проверки модератором.'
+        : 'Рецензии и оценки публикуются после проверки модератором.';
+  }
+
   function updateScore() {
     const c = criteria();
     ['val1', 'val2', 'val3', 'val4', 'valAtm'].forEach((id, i) => { $('#' + id).textContent = String(c[i]); });
@@ -1025,30 +1044,35 @@
   }
 
   function saveDraft() {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ articleTitle: $('#articleTitle').value, reviewTitle: $('#reviewTitle').value, text: $('#reviewText').value, criteria: criteria() })); } catch { /* недоступно */ }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ articleTitle: $('#articleTitle').value, reviewTitle: $('#reviewTitle').value, text: $('#reviewText').value, criteria: criteria(), submissionType: $('#submissionType').value })); } catch { /* недоступно */ }
   }
 
   function loadDraft() {
     try {
       const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
       if (!d || typeof d !== 'object') return;
+      if (typeof d.submissionType === 'string' && ['both', 'rating', 'review'].includes(d.submissionType)) $('#submissionType').value = d.submissionType;
       if (typeof d.articleTitle === 'string') $('#articleTitle').value = d.articleTitle.slice(0, 150);
       if (typeof d.reviewTitle === 'string') $('#reviewTitle').value = d.reviewTitle.slice(0, 120);
       if (typeof d.text === 'string') $('#reviewText').value = d.text.slice(0, 10000);
       if (Array.isArray(d.criteria) && d.criteria.length === 5) critEls().forEach((el, i) => { const n = Number(d.criteria[i]); if (Number.isInteger(n) && n >= 1 && n <= 10) el.value = String(n); });
     } catch { /* повреждённый черновик */ }
+    updateSubmissionMode();
   }
 
   function resetForm() {
     critEls().forEach((el) => { el.value = '5'; });
+    $('#submissionType').value = 'both';
     ['articleTitle', 'reviewTitle', 'reviewText'].forEach((id) => { $('#' + id).value = ''; });
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
     $('#textCounter').textContent = '0';
+    updateSubmissionMode();
     updateScore();
   }
 
   function initEvaluator() {
     $('#reviewerKind').addEventListener('change', updateEvaluatorUi);
+    $('#submissionType').addEventListener('change', () => { updateSubmissionMode(); saveDraft(); });
     $('#aiProfile').replaceChildren(...AI_NAMES.map((n) => h('option', { value: n }, n)));
     critEls().forEach((el) => el.addEventListener('input', () => { updateScore(); saveDraft(); }));
     ['articleTitle', 'reviewTitle'].forEach((id) => $('#' + id).addEventListener('input', saveDraft));
@@ -1062,18 +1086,22 @@
     $('#reviewForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const aiMode = state.admin && $('#reviewerKind').value === 'ai';
-      if (!aiMode && !state.me) { toast('Чтобы отправить рецензию, войдите в аккаунт', 'error'); return openAuth('login'); }
+      if (!aiMode && !state.me) { toast('Чтобы отправить оценку или рецензию, войдите в аккаунт', 'error'); return openAuth('login'); }
       if (!e.currentTarget.reportValidity()) return;
       if (!state.authors.length) return toast('Список авторов не загружен', 'error');
       const btn = $('#submitBtn');
       btn.disabled = true;
       try {
+        const mode = $('#submissionType').value;
+        const hasReview = mode !== 'rating';
+        const hasScore = mode !== 'review';
         const res = await api('/reviews', { method: 'POST', body: {
-          articleTitle: $('#articleTitle').value, reviewTitle: $('#reviewTitle').value, authorId: $('#authorSelect').value,
-          text: $('#reviewText').value, criteria: criteria(),
+          articleTitle: $('#articleTitle').value, reviewTitle: hasReview ? $('#reviewTitle').value : '', authorId: $('#authorSelect').value,
+          text: hasReview ? $('#reviewText').value : '', criteria: hasScore ? criteria() : undefined, hasReview, hasScore,
           reviewerKind: aiMode ? 'ai' : 'user', reviewerName: aiMode ? $('#aiProfile').value : undefined,
         } });
-        toast(res.status === 'approved' ? 'Рецензия опубликована!' : 'Спасибо! Рецензия отправлена на модерацию.', 'ok');
+        const action = mode === 'rating' ? 'Оценка' : mode === 'review' ? 'Рецензия' : 'Оценка и рецензия';
+        toast(res.status === 'approved' ? action + ' опубликована!' : 'Спасибо! ' + action.toLowerCase() + ' отправлена на модерацию.', 'ok');
         resetForm();
         await loadData();
       } catch (err) { toast(err.message, 'error'); }
