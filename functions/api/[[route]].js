@@ -42,8 +42,14 @@ function publicUserAvatar(id, avatar) {
     : (avatar || '');
 }
 
+function parseJson(value, fallback) {
+  try { const parsed = JSON.parse(value || ''); return parsed && typeof parsed === 'object' ? parsed : fallback; }
+  catch { return fallback; }
+}
+
 const rowToUser = (u) => ({
-  username: u.username, avatar: publicUserAvatar(u.id, u.avatar), bio: u.bio, createdAt: u.created_at, banned: !!u.banned,
+  username: u.username, avatar: publicUserAvatar(u.id, u.avatar), bio: u.bio || '', createdAt: u.created_at, banned: !!u.banned,
+  socialLinks: parseJson(u.social_links, {}), favoriteAuthorIds: parseJson(u.favorite_author_ids, []), favoriteArticles: parseJson(u.favorite_articles, []),
 });
 
 const SELECT_REVIEWS = 'SELECT *, (reviewer_user_id IS NOT NULL) AS registered FROM reviews';
@@ -66,8 +72,8 @@ const isUnique = (e) => /UNIQUE|constraint/i.test(String((e && e.message) || e))
 
 async function getData(env, admin) {
   const usersSql = admin
-    ? 'SELECT id, username, avatar, bio, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
-    : 'SELECT id, username, avatar, bio, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
+    ? 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
+    : 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
   const [authors, reviews, users] = await Promise.all([
     env.DB.prepare(
       'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
@@ -85,11 +91,11 @@ async function getData(env, admin) {
 
 async function meInfo(env, user) {
   if (!user) return { user: null, authorId: null };
-  const author = await env.DB.prepare('SELECT id FROM authors WHERE owner_user_id = ?').bind(user.id).first();
-  return {
-    user: { username: user.username, avatar: publicUserAvatar(user.id, user.avatar), bio: user.bio, createdAt: user.created_at },
-    authorId: author ? author.id : null,
-  };
+  const results = await Promise.all([
+    env.DB.prepare('SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at FROM users WHERE id = ?').bind(user.id).first(),
+    env.DB.prepare('SELECT id FROM authors WHERE owner_user_id = ?').bind(user.id).first(),
+  ]);
+  return { user: results[0] ? rowToUser(results[0]) : null, authorId: results[1] ? results[1].id : null };
 }
 
 /* ---------- аккаунты ---------- */
@@ -137,11 +143,49 @@ async function logout(request, env) {
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
 }
 
+const SOCIAL_FIELDS = ['fandom', 'youtube', 'tiktok', 'discord', 'telegram', 'instagram', 'vk', 'other'];
+
+function parseSocialLinks(value) {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Социальные ссылки: неверный формат');
+  const result = {};
+  for (const key of SOCIAL_FIELDS) {
+    const raw = value[key];
+    if (raw == null || raw === '') { result[key] = ''; continue; }
+    if (typeof raw !== 'string' || raw.length > 300) throw new HttpError(400, 'Ссылка должна быть не длиннее 300 символов');
+    let url;
+    try { url = new URL(raw.trim()); } catch { throw new HttpError(400, 'Проверьте формат социальных ссылок'); }
+    if (url.protocol !== 'https:' || url.username || url.password) throw new HttpError(400, 'Для социальных ссылок разрешены только HTTPS-адреса');
+    result[key] = url.toString();
+  }
+  return result;
+}
+
+function parseFavorites(value, label, max = 20) {
+  if (!Array.isArray(value) || value.length > max) throw new HttpError(400, label + ': выберите не больше ' + max);
+  const result = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string' || !raw.trim() || [...raw].length > 150) throw new HttpError(400, label + ': некорректное значение');
+    const item = raw.trim();
+    if (!result.includes(item)) result.push(item);
+  }
+  return result;
+}
+
 async function updateProfile(request, env, user) {
-  const body = await readJson(request, 8 * 1024);
+  const body = await readJson(request, 16 * 1024);
   const bio = optionalText(body.bio, LIMITS.bio, 'О себе');
   const avatar = body.avatar == null ? user.avatar : parseAvatar(body.avatar);
-  await env.DB.prepare('UPDATE users SET bio = ?, avatar = ? WHERE id = ?').bind(bio, avatar, user.id).run();
+  const socialLinks = parseSocialLinks(body.socialLinks || {});
+  const favoriteAuthorIds = parseFavorites(body.favoriteAuthorIds || [], 'Любимые авторы');
+  const favoriteArticles = parseFavorites(body.favoriteArticles || [], 'Избранные статьи');
+  if (favoriteAuthorIds.length) {
+    const placeholders = favoriteAuthorIds.map(() => '?').join(', ');
+    const rows = await env.DB.prepare('SELECT id FROM authors WHERE id IN (' + placeholders + ')').bind(...favoriteAuthorIds).all();
+    const validIds = new Set(rows.results.map((row) => row.id));
+    if (favoriteAuthorIds.some((id) => !validIds.has(id))) throw new HttpError(400, 'Список любимых авторов устарел. Обновите страницу.');
+  }
+  await env.DB.prepare('UPDATE users SET bio = ?, avatar = ?, social_links = ?, favorite_author_ids = ?, favorite_articles = ? WHERE id = ?')
+    .bind(bio, avatar, JSON.stringify(socialLinks), JSON.stringify(favoriteAuthorIds), JSON.stringify(favoriteArticles), user.id).run();
   return json({ ok: true });
 }
 

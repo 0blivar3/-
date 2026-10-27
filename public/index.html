@@ -19,11 +19,11 @@
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.2.1">
+  <link rel="stylesheet" href="/assets/style.css?v=2.2.2">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
-  <script src="/assets/app.js?v=2.2.1" defer></script>
+  <script src="/assets/app.js?v=2.2.2" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">К содержимому</a>
@@ -52,7 +52,6 @@
     <a class="nav-btn" href="#/critics" data-route="critics">🤖 Критики</a>
     <a class="nav-btn" href="#/evaluator" data-route="evaluator">📝 Оценить статью</a>
     <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
-    <a class="nav-btn" href="#/system" data-route="system">ℹ️ Формула (90б)</a>
     <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
   </nav>
 
@@ -312,7 +311,7 @@
           <div class="rzt-bottom-bar">
             <div class="rzt-actions-left">
               <button type="button" class="rzt-btn-action" id="resetBtn">🗄 Очистить черновик</button>
-              <a class="rzt-btn-action" href="#/system">ⓘ Критерии 90-балльной системы</a>
+              <button type="button" class="rzt-btn-action" id="criteriaOpenBtn">ⓘ Критерии 90-балльной системы</button>
             </div>
             <div class="rzt-submit-box">
               <div class="text-right" aria-live="polite">
@@ -464,6 +463,22 @@
               <p class="muted tiny mb-12">Выберите PNG, JPG или WebP до 2 МБ. Изображение аккуратно уменьшится до 512 пикселей и сохранится в WebP без сильного сжатия; предпросмотр появится сразу.</p>
               <label class="field-label" for="profileBio">О себе</label>
               <textarea id="profileBio" class="input-field" rows="4" maxlength="600" placeholder="Расскажите о себе и своих вкусах…"></textarea>
+              <h3 class="section-title mt-15 mb-10">🔗 Социальные сети и Fandom</h3>
+              <div class="profile-social-grid">
+                <div><label class="field-label" for="profileSocialFandom">Профиль Fandom</label><input type="url" id="profileSocialFandom" class="input-field" maxlength="300" placeholder="https://minecraft-backrooms.fandom.com/wiki/User:…"></div>
+                <div><label class="field-label" for="profileSocialYoutube">YouTube</label><input type="url" id="profileSocialYoutube" class="input-field" maxlength="300" placeholder="https://youtube.com/@…"></div>
+                <div><label class="field-label" for="profileSocialTiktok">TikTok</label><input type="url" id="profileSocialTiktok" class="input-field" maxlength="300" placeholder="https://tiktok.com/@…"></div>
+                <div><label class="field-label" for="profileSocialDiscord">Discord</label><input type="url" id="profileSocialDiscord" class="input-field" maxlength="300" placeholder="https://discord.com/users/…"></div>
+                <div><label class="field-label" for="profileSocialTelegram">Telegram</label><input type="url" id="profileSocialTelegram" class="input-field" maxlength="300" placeholder="https://t.me/…"></div>
+                <div><label class="field-label" for="profileSocialInstagram">Instagram</label><input type="url" id="profileSocialInstagram" class="input-field" maxlength="300" placeholder="https://instagram.com/…"></div>
+                <div><label class="field-label" for="profileSocialVk">ВКонтакте</label><input type="url" id="profileSocialVk" class="input-field" maxlength="300" placeholder="https://vk.com/…"></div>
+                <div><label class="field-label" for="profileSocialOther">Другая ссылка</label><input type="url" id="profileSocialOther" class="input-field" maxlength="300" placeholder="https://…"></div>
+              </div>
+              <h3 class="section-title mt-15 mb-10">⭐ Предпочтения</h3>
+              <div class="profile-favorites-grid">
+                <div><label class="field-label" for="profileFavoriteAuthors">Любимые авторы (до 20)</label><select id="profileFavoriteAuthors" class="input-field" multiple size="6" aria-describedby="favoriteAuthorsHelp"></select><p id="favoriteAuthorsHelp" class="muted tiny">Удерживайте Ctrl (Windows) или ⌘ (Mac), чтобы выбрать несколько.</p></div>
+                <div><label class="field-label" for="profileFavoriteArticles">Избранные статьи (до 20)</label><select id="profileFavoriteArticles" class="input-field" multiple size="6" aria-describedby="favoriteArticlesHelp"></select><p id="favoriteArticlesHelp" class="muted tiny">Удерживайте Ctrl (Windows) или ⌘ (Mac), чтобы выбрать несколько.</p></div>
+              </div>
               <div class="row-between"><span class="muted tiny" id="profileBioCounter">0 / 600</span><button type="submit" class="btn btn-purple">Сохранить профиль</button></div>
             </form>
           </div>
@@ -539,26 +554,28 @@
       </div>
     </section>
 
-    <!-- ФОРМУЛА -->
-    <section id="tab-system" class="tab-content" aria-label="Формула оценки">
-      <div class="panel wrap wrap-800">
-        <h2 class="panel-title">Формула оценки (90 баллов)</h2>
-        <div class="doc-text">
-          <p>Четыре базовых критерия оцениваются от 1 до 10: «Текст / Понятность», «Структура / Вики», «Реализация концепта» и «Оригинальность». Их сумма умножается на 1.4, затем на коэффициент критерия «Атмосфера / Вайб» (1–10). Результат округляется и ограничивается 90 баллами.</p>
-          <div class="formula-box">Балл = round((К1 + К2 + К3 + К4) × 1.4 × коэффициент атмосферы), максимум 90</div>
-          <table class="table-custom table-narrow">
-            <thead><tr><th>Атмосфера</th><th>Коэффициент</th></tr></thead>
-            <tbody id="atmTable"></tbody>
-          </table>
-          <p>Балл всегда пересчитывается сервером по вашим оценкам, поэтому подделать его невозможно.</p>
-        </div>
-      </div>
-    </section>
+
   </main>
 
   <footer class="footer muted small">Неофициальный фанатский портал. Рецензии проходят модерацию. · <a href="#" id="adminLoginLink">Вход для администратора</a></footer>
 
   <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+  <dialog id="criteriaDialog" aria-labelledby="criteriaTitle">
+    <div class="criteria-dialog-head">
+      <h2 id="criteriaTitle" class="panel-title">ℹ️ Критерии 90-балльной системы</h2>
+      <button type="button" class="btn btn-outline" id="criteriaCloseBtn" aria-label="Закрыть окно">✕</button>
+    </div>
+    <div class="doc-text">
+      <p>Четыре базовых критерия оцениваются от 1 до 10: «Текст / Понятность», «Структура / Вики», «Реализация концепта» и «Оригинальность». Их сумма умножается на 1.4, затем на коэффициент критерия «Атмосфера / Вайб» (1–10). Результат округляется и ограничивается 90 баллами.</p>
+      <div class="formula-box">Балл = round((К1 + К2 + К3 + К4) × 1.4 × коэффициент атмосферы), максимум 90</div>
+      <table class="table-custom table-narrow">
+        <thead><tr><th>Атмосфера</th><th>Коэффициент</th></tr></thead>
+        <tbody id="atmTable"></tbody>
+      </table>
+      <p>Балл всегда пересчитывается сервером по вашим оценкам, поэтому подделать его невозможно.</p>
+    </div>
+  </dialog>
 
   <dialog id="loginDialog" aria-labelledby="loginTitle">
     <form id="loginForm" method="dialog">

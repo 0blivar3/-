@@ -470,6 +470,21 @@
     } catch (err) { toast(err.message, 'error'); }
   }
 
+  function socialLinksNode(links) {
+    const labels = {
+      fandom: 'Fandom', youtube: 'YouTube', tiktok: 'TikTok', discord: 'Discord',
+      telegram: 'Telegram', instagram: 'Instagram', vk: 'ВКонтакте', other: 'Ссылка',
+    };
+    const items = Object.entries(links || {}).filter(([key, value]) => {
+      if (!labels[key] || typeof value !== 'string' || !value) return false;
+      try { return new URL(value).protocol === 'https:'; } catch { return false; }
+    });
+    return items.length
+      ? h('div', { class: 'social-links' }, items.map(([key, value]) =>
+          h('a', { href: value, target: '_blank', rel: 'noopener noreferrer', class: 'btn btn-outline' }, labels[key] + ' ↗')))
+      : null;
+  }
+
   function renderUserPage(username) {
     const box = $('#userPage');
     const u = state.idx.users.get(lc(username));
@@ -490,6 +505,16 @@
       name: u.username, avatarUrl: u.avatar, badge: userBadge(rs.length), lines, bio: u.bio, actions,
       stats: [[rs.length, 'Рецензий'], [uniqueTitles(rs), 'Статей'], [rs.length ? avg(rs).toFixed(1) : '—', 'Ср. оценка'], [rs.length ? Math.max(...rs.map((r) => r.score)) : '—', 'Макс. оценка']],
     })];
+    const socialNode = socialLinksNode(u.socialLinks);
+    if (socialNode) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '🔗 Ссылки'), socialNode));
+    const favoriteAuthors = (u.favoriteAuthorIds || []).map((id) => state.idx.authors.get(id)).filter(Boolean);
+    if (favoriteAuthors.length) body.push(h('div', { class: 'panel' },
+      h('h3', { class: 'panel-title' }, '⭐ Любимые авторы'),
+      h('div', { class: 'card-grid' }, favoriteAuthors.map(authorCard))));
+    const favoriteArticles = (u.favoriteArticles || []).map((title) => state.idx.articles.find((a) => lc(a.title) === lc(title))).filter(Boolean);
+    if (favoriteArticles.length) body.push(h('div', { class: 'panel' },
+      h('h3', { class: 'panel-title' }, '📚 Избранные статьи'),
+      h('div', { class: 'article-grid' }, favoriteArticles.map(articleCard))));
     if (own) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '✍️ Карточка автора'), authorCard(own)));
     const arts = state.idx.articles.filter((x) => x.reviews.some((r) => r.registered && lc(r.reviewerName) === lc(u.username)));
     const content = state.userTab === 'reviews'
@@ -554,6 +579,14 @@
     $('#profileBio').value = me.bio || '';
     $('#profileBio').maxLength = lim.bio;
     $('#profileBioCounter').textContent = `${[...me.bio || ''].length} / ${lim.bio}`;
+    const socialKeys = ['fandom', 'youtube', 'tiktok', 'discord', 'telegram', 'instagram', 'vk', 'other'];
+    const socialInputIds = ['profileSocialFandom', 'profileSocialYoutube', 'profileSocialTiktok', 'profileSocialDiscord', 'profileSocialTelegram', 'profileSocialInstagram', 'profileSocialVk', 'profileSocialOther'];
+    socialInputIds.forEach((id, i) => { $('#' + id).value = (me.socialLinks && me.socialLinks[socialKeys[i]]) || ''; });
+    $('#profileFavoriteAuthors').replaceChildren(...state.authors.map((a) =>
+      h('option', { value: a.id, selected: (me.favoriteAuthorIds || []).includes(a.id) }, a.name)));
+    const titles = [...new Set(state.idx.articles.map((a) => a.title))].sort((a, b) => a.localeCompare(b, 'ru'));
+    $('#profileFavoriteArticles').replaceChildren(...titles.map((title) =>
+      h('option', { value: title, selected: (me.favoriteArticles || []).some((v) => lc(v) === lc(title)) }, title)));
 
     const mine = state.authors.find((a) => a.id === state.myAuthorId);
     $('#createMyAuthorForm').hidden = !!mine;
@@ -569,7 +602,7 @@
   const TITLES = {
     home: 'Закулисье Майнкрафта Вики — Экспертный портал рецензий', articles: 'Статьи', article: 'Статья', authors: 'Авторы', author: 'Автор',
     users: 'Пользователи', user: 'Профиль', critics: 'Критики', value: 'Калькулятор ценности статей ЗМВ', evaluator: 'Оценить статью',
-    system: 'Формула оценки (90 баллов)', moderation: 'Модерация', profile: 'Мой профиль', search: 'Поиск',
+    moderation: 'Модерация', profile: 'Мой профиль', search: 'Поиск',
   };
   const NAV_OF = { article: 'articles', author: 'authors', user: 'users' };
 
@@ -854,7 +887,13 @@
           if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
           previewObjectUrl = null;
         }
-        await api('/me/profile', { method: 'POST', body: { bio: $('#profileBio').value } });
+        const socialKeys = ['fandom', 'youtube', 'tiktok', 'discord', 'telegram', 'instagram', 'vk', 'other'];
+        const socialInputIds = ['profileSocialFandom', 'profileSocialYoutube', 'profileSocialTiktok', 'profileSocialDiscord', 'profileSocialTelegram', 'profileSocialInstagram', 'profileSocialVk', 'profileSocialOther'];
+        const socialLinks = Object.fromEntries(socialKeys.map((key, i) => [key, $('#' + socialInputIds[i]).value.trim()]));
+        const favoriteAuthorIds = [...$('#profileFavoriteAuthors').selectedOptions].map((option) => option.value);
+        const favoriteArticles = [...$('#profileFavoriteArticles').selectedOptions].map((option) => option.value);
+        if (favoriteAuthorIds.length > 20 || favoriteArticles.length > 20) throw new Error('Можно выбрать не больше 20 любимых авторов и 20 статей');
+        await api('/me/profile', { method: 'POST', body: { bio: $('#profileBio').value, socialLinks, favoriteAuthorIds, favoriteArticles } });
         toast('Профиль сохранён', 'ok');
         await refreshAll();
       } catch (err) { toast(err.message, 'error'); }
@@ -997,6 +1036,10 @@
     ['articleTitle', 'reviewTitle'].forEach((id) => $('#' + id).addEventListener('input', saveDraft));
     $('#reviewText').addEventListener('input', () => { $('#textCounter').textContent = String(textLen()); saveDraft(); });
     $('#resetBtn').addEventListener('click', resetForm);
+    const criteriaDialog = $('#criteriaDialog');
+    $('#criteriaOpenBtn').addEventListener('click', () => criteriaDialog.showModal());
+    $('#criteriaCloseBtn').addEventListener('click', () => criteriaDialog.close());
+    criteriaDialog.addEventListener('click', (e) => { if (e.target === criteriaDialog) criteriaDialog.close(); });
 
     $('#reviewForm').addEventListener('submit', async (e) => {
       e.preventDefault();
