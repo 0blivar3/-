@@ -31,6 +31,7 @@ migrations/002_accounts.sql  обновление уже работающей б
 
 - Build command — пусто, Build output directory — `public`.
 - Settings → Bindings: D1 с именем **`DB`**.
+- Для загрузки аватарок создайте R2 bucket и подключите его в Pages → Settings → Bindings как **R2 bucket** с переменной **`AVATARS`**. Если привязка не настроена, сайт продолжит работать, но загрузка файлов будет недоступна.
 - Settings → Variables and secrets: секрет **`ADMIN_PASSWORD`** (от 12 символов).
 - Необязательно: `TURNSTILE_SECRET` + `TURNSTILE_SITE_KEY` (капча при регистрации).
 - Необязательно: `PBKDF2_ITERATIONS` (10000–100000, по умолчанию 100000). Если на бесплатном плане регистрация/вход падают с ошибкой лимита CPU, поставьте 50000 или 20000.
