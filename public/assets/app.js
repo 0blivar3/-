@@ -203,10 +203,16 @@
       tag.append(' ' + r.reviewerName);
       return tag;
     }
-    const exists = r.registered && state.idx.users.has(lc(r.reviewerName));
-    return exists
-      ? h('a', { class: 'ai-reviewer-tag user-reviewer-tag', href: userHref(r.reviewerName) }, '👤 ' + r.reviewerName)
-      : h('span', { class: 'ai-reviewer-tag user-reviewer-tag' }, '👤 ' + r.reviewerName);
+
+    const user = r.registered ? state.idx.users.get(lc(r.reviewerName)) : null;
+    const tag = user
+      ? h('a', { class: 'ai-reviewer-tag user-reviewer-tag', href: userHref(r.reviewerName) })
+      : h('span', { class: 'ai-reviewer-tag user-reviewer-tag' });
+    tag.append(
+      avatar(r.reviewerName, user?.avatar, 'reviewer-avatar'),
+      h('span', null, r.reviewerName)
+    );
+    return tag;
   }
 
   function reviewCard(r, { moderation = false, showStatus = false } = {}) {
