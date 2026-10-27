@@ -167,7 +167,7 @@
         h('div', { class: 'ec-name' }, a.name),
         h('div', { class: 'ec-badge' }, authorBadge(rs.length, average)),
         h('p', { class: 'ec-bio' }, a.bio || 'Описание пока не добавлено.'),
-        statsRow([[uniqueTitles(rs), 'Статей'], [rs.length, 'Рецензий'], [rs.length ? average.toFixed(1) : '—', 'Ср. балл']])));
+        statsRow([[uniqueTitles(all), 'Статей'], [rs.length, 'Рецензий'], [scored(all).length ? average.toFixed(1) : '—', 'Ср. балл']])));
   }
 
   function userCard(u) {
@@ -181,7 +181,7 @@
         h('div', { class: 'ec-name' }, u.username, u.banned ? h('span', { class: 'chip chip-warn' }, 'заблокирован') : null),
         h('div', { class: 'ec-badge' }, own ? `✍️ Автор: ${own.name}` : userBadge(rs.length)),
         h('p', { class: 'ec-bio' }, u.bio || 'Пользователь пока ничего не рассказал о себе.'),
-        statsRow([[rs.length, 'Рецензий'], [uniqueTitles(rs), 'Статей'], [rs.length ? avg(rs).toFixed(1) : '—', 'Ср. оценка']])));
+        statsRow([[rs.length, 'Рецензий'], [uniqueTitles(all), 'Статей'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. оценка']])));
   }
 
   function articleCard(art) {
