@@ -347,6 +347,16 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
 .author-inline { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }
 .author-inline:hover strong { text-decoration: underline; }
 
+/* Социальные ссылки, избранное и окно критериев */
+.profile-social-grid, .profile-favorites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.profile-favorites-grid select { min-height: 140px; }
+.social-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.criteria-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.criteria-dialog-head .panel-title { margin: 0; }
+#criteriaDialog { width: min(680px, calc(100vw - 32px)); max-height: min(85vh, 760px); overflow: auto; }
+#criteriaDialog .table-narrow { max-width: 100%; }
+@media (max-width: 600px) { .profile-social-grid, .profile-favorites-grid { grid-template-columns: 1fr; } }
+
 /* страницы профиля автора / пользователя */
 .profile-hero { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 16px; }
 .ph-banner { height: 140px; }
