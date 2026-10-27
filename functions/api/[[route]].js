@@ -134,9 +134,47 @@ async function logout(request, env) {
 async function updateProfile(request, env, user) {
   const body = await readJson(request, 8 * 1024);
   const bio = optionalText(body.bio, LIMITS.bio, 'О себе');
-  const avatar = parseAvatar(body.avatar);
+  const avatar = body.avatar == null ? user.avatar : parseAvatar(body.avatar);
   await env.DB.prepare('UPDATE users SET bio = ?, avatar = ? WHERE id = ?').bind(bio, avatar, user.id).run();
   return json({ ok: true });
+}
+
+async function uploadUserAvatar(request, env, user) {
+  if (!env.AVATARS) throw new HttpError(503, 'Загрузка аватарок не настроена: администратору нужно подключить R2-бакет AVATARS в Cloudflare Pages');
+  const declared = Number(request.headers.get('Content-Length') || 0);
+  if (declared > 2 * 1024 * 1024 + 65536) throw new HttpError(413, 'Изображение должно быть не больше 2 МБ');
+  let form;
+  try { form = await request.formData(); } catch { throw new HttpError(400, 'Не удалось прочитать загруженный файл'); }
+  const file = form.get('avatar');
+  if (!file || typeof file.arrayBuffer !== 'function') throw new HttpError(400, 'Выберите изображение');
+  if (!file.size || file.size > 2 * 1024 * 1024) throw new HttpError(413, 'Изображение должно быть не больше 2 МБ');
+  const types = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  if (!types.has(file.type)) throw new HttpError(400, 'Поддерживаются только PNG, JPG и WebP');
+  const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const isPng = signature.length >= 8 && signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4e && signature[3] === 0x47 && signature[4] === 0x0d && signature[5] === 0x0a && signature[6] === 0x1a && signature[7] === 0x0a;
+  const isJpeg = signature.length >= 3 && signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff;
+  const isWebp = signature.length >= 12 && String.fromCharCode(...signature.slice(0, 4)) === 'RIFF' && String.fromCharCode(...signature.slice(8, 12)) === 'WEBP';
+  if (!(file.type === 'image/png' && isPng) && !(file.type === 'image/jpeg' && isJpeg) && !(file.type === 'image/webp' && isWebp)) {
+    throw new HttpError(400, 'Файл не похож на корректное изображение');
+  }
+  const key = `avatars/${user.id}`;
+  await env.AVATARS.put(key, file.stream(), {
+    httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=3600' },
+  });
+  const avatar = `/api/avatar/${user.id}`;
+  await env.DB.prepare('UPDATE users SET avatar = ? WHERE id = ?').bind(avatar, user.id).run();
+  return json({ ok: true, avatar });
+}
+
+async function getUserAvatar(env, id) {
+  if (!env.AVATARS) throw new HttpError(404, 'Аватар не найден');
+  const object = await env.AVATARS.get(`avatars/${id}`);
+  if (!object) throw new HttpError(404, 'Аватар не найден');
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('Cache-Control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return new Response(object.body, { headers });
 }
 
 async function changePassword(request, env, user) {
@@ -436,12 +474,15 @@ export async function onRequest({ request, env }) {
       });
     }
     if (path === '/api/data' && method === 'GET') return json(await getData(env, await isAdmin(request, env)));
+    let avatarMatch = path.match(/^\/api\/avatar\/([A-Za-z0-9_-]{1,64})$/);
+    if (avatarMatch && method === 'GET') return await getUserAvatar(env, avatarMatch[1]);
 
     if (path === '/api/register' && method === 'POST') return await register(request, env);
     if (path === '/api/login' && method === 'POST') return await login(request, env);
     if (path === '/api/logout' && method === 'POST') return await logout(request, env);
     if (path === '/api/me' && method === 'GET') return json(await meInfo(env, await getSessionUser(request, env)));
     if (path === '/api/me/profile' && method === 'POST') return await updateProfile(request, env, await needUser());
+    if (path === '/api/me/avatar' && method === 'POST') return await uploadUserAvatar(request, env, await needUser());
     if (path === '/api/me/password' && method === 'POST') return await changePassword(request, env, await needUser());
     if (path === '/api/me/delete' && method === 'POST') return await deleteAccount(request, env, await needUser());
     if (path === '/api/me/reviews' && method === 'GET') {
