@@ -800,6 +800,30 @@
   }
 
   /* ---------- профиль ---------- */
+  async function compressAvatar(file) {
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = imageUrl;
+      await img.decode();
+      const scale = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Не удалось обработать изображение');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.92, 0.88, 0.84, 0.8]) {
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+        if (!blob) throw new Error('Не удалось обработать изображение');
+        if (blob.size <= 350 * 1024) return blob;
+      }
+      throw new Error('Изображение слишком сложное. Попробуйте файл поменьше.');
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
+  }
+
   function initProfile() {
     let selectedAvatarFile = null;
     let previewObjectUrl = null;
@@ -820,8 +844,9 @@
       btn.disabled = true;
       try {
         if (selectedAvatarFile) {
+          const compressed = await compressAvatar(selectedAvatarFile);
           const formData = new FormData();
-          formData.append('avatar', selectedAvatarFile);
+          formData.append('avatar', compressed, 'avatar.webp');
           const res = await fetch('/api/me/avatar', { method: 'POST', credentials: 'same-origin', body: formData });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
