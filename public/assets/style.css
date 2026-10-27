@@ -189,6 +189,7 @@ input[type=range]::-moz-range-thumb { height: 18px; width: 18px; border: 0; bord
 /* Рецензии */
 .review-card { background: var(--card-inner); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; margin-bottom: 10px; position: relative; transition: border 0.2s; }
 .review-card:hover { border-color: var(--border-accent); }
+.review-card.review-link-target { border-color: var(--accent-purple-light); box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.22); }
 .review-top-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; }
 .review-main-title { font-size: 1.05rem; font-weight: 700; color: #fff; overflow-wrap: anywhere; }
 .review-article-title { display: block; font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; text-decoration: none; overflow-wrap: anywhere; }
