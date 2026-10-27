@@ -602,7 +602,7 @@
   const TITLES = {
     home: 'Закулисье Майнкрафта Вики — Экспертный портал рецензий', articles: 'Статьи', article: 'Статья', authors: 'Авторы', author: 'Автор',
     users: 'Пользователи', user: 'Профиль', critics: 'Критики', value: 'Калькулятор ценности статей ЗМВ', evaluator: 'Оценить статью',
-    system: 'Формула оценки (90 баллов)', moderation: 'Модерация', profile: 'Мой профиль', search: 'Поиск',
+    moderation: 'Модерация', profile: 'Мой профиль', search: 'Поиск',
   };
   const NAV_OF = { article: 'articles', author: 'authors', user: 'users' };
 
