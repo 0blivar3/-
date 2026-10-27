@@ -195,6 +195,7 @@
         h('div', { class: 'ac-meta' }, 'Автор: ', author ? author.name : 'Неизвестный'),
         h('div', { class: 'ac-chips' },
           h('span', { class: 'chip' }, cnt(reviewCount, F_REV)),
+          h('span', { class: 'chip' }, cnt(scoreCount, ['оценка', 'оценки', 'оценок'])),
           h('span', { class: 'chip' }, scoreCount ? `макс. ${art.max}` : 'нет оценок'),
           h('span', { class: 'chip' }, fmtDay(art.latest)))));
   }
@@ -327,12 +328,12 @@
 
     const sort = $('#feedSortSelect').value;
     const sorted = [...rs];
-    if (sort === 'highest') sorted.sort((a, b) => b.score - a.score);
-    else if (sort === 'lowest') sorted.sort((a, b) => a.score - b.score);
+    if (sort === 'highest') sorted.sort((a, b) => (b.hasScore === false ? -1 : b.score) - (a.hasScore === false ? -1 : a.score));
+    else if (sort === 'lowest') sorted.sort((a, b) => (a.hasScore === false ? Infinity : a.score) - (b.hasScore === false ? Infinity : b.score));
     else sorted.sort((a, b) => b.createdAt - a.createdAt);
     $('#recentFeed').replaceChildren(...(sorted.length
       ? sorted.slice(0, state.feedLimit).map((r) => reviewCard(r))
-      : [emptyBox(state.loaded ? 'Нет рецензий для отображения.' : 'Загрузка…')]));
+      : [emptyBox(state.loaded ? 'Пока нет рецензий и оценок для отображения.' : 'Загрузка…')]));
     $('#feedMoreBtn').hidden = sorted.length <= state.feedLimit;
   }
 
@@ -374,7 +375,7 @@
         h('div', { class: 'rzt-tags' }, h('span', { class: 'rzt-tag' }, '📄 Статья вики'), h('span', { class: 'rzt-tag rzt-tag-accent' }, 'Закулисье')),
         h('h2', { class: 'rzt-title' }, article.title),
         h('a', { class: 'row-gap author-inline', href: authorHref(author.id) }, avatar(author.name, author.avatar, 'avatar-xs'), 'Автор: ', h('strong', null, author.name)),
-        statsRow([[reviewCount, 'Рецензий'], [scoreReviews.length ? Math.round(article.avg) : '—', 'Ср. балл'], [scoreReviews.length ? article.max : '—', 'Макс. балл'], [scoreReviews.length ? Math.min(...scoreReviews.map((r) => r.score)) : '—', 'Мин. балл']], 'inline-stats'))));
+        statsRow([[reviewCount, 'Рецензий'], [scoreReviews.length, 'Оценок'], [scoreReviews.length ? Math.round(article.avg) : '—', 'Ср. балл'], [scoreReviews.length ? article.max : '—', 'Макс. балл'], [scoreReviews.length ? Math.min(...scoreReviews.map((r) => r.score)) : '—', 'Мин. балл']], 'inline-stats'))));
     list.replaceChildren(...rs.map((r) => reviewCard(r)));
     document.title = `${article.title} — рецензии | Закулисье Майнкрафта Вики`;
   }
@@ -444,12 +445,12 @@
     if (state.editingAuthor === a.id && canEditAuthor(a)) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '✏️ Редактирование карточки'), authorEditForm(a)));
 
     const groups = new Map();
-    rs.forEach((r) => { const k = lc(r.articleTitle); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+    all.forEach((r) => { const k = lc(r.articleTitle); if (!groups.has(k)) groups.set(k, []).push(r); });
     const content = state.authorTab === 'articles'
       ? (groups.size ? h('div', { class: 'article-grid' }, state.idx.articles.filter((x) => groups.has(lc(x.title))).sort((x, y) => y.avg - x.avg).map(articleCard)) : emptyBox('Статей пока нет.'))
-      : h('div', null, rs.length ? rs.map((r) => reviewCard(r)) : emptyBox('Рецензий нет.'));
+      : h('div', null, all.length ? all.map((r) => reviewCard(r)) : emptyBox('Рецензий и оценок пока нет.'));
     body.push(h('div', { class: 'panel' },
-      tabButtons([['articles', '📚 Статьи'], ['reviews', '💬 Рецензии']], state.authorTab, (k) => { state.authorTab = k; route(); }), content));
+      tabButtons([['articles', '📚 Статьи'], ['reviews', '💬 Рецензии и оценки']], state.authorTab, (k) => { state.authorTab = k; route(); }), content));
     box.replaceChildren(...body);
     document.title = `${a.name} — автор | Закулисье Майнкрафта Вики`;
   }
@@ -536,9 +537,9 @@
     if (own) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '✍️ Карточка автора'), authorCard(own)));
     const arts = state.idx.articles.filter((x) => x.reviews.some((r) => r.registered && lc(r.reviewerName) === lc(u.username)));
     const content = state.userTab === 'reviews'
-      ? h('div', null, rs.length ? rs.map((r) => reviewCard(r)) : emptyBox('Рецензий пока нет.'))
+      ? h('div', null, all.length ? all.map((r) => reviewCard(r)) : emptyBox('Рецензий и оценок пока нет.'))
       : (arts.length ? h('div', { class: 'article-grid' }, arts.map(articleCard)) : emptyBox('Статей пока нет.'));
-    body.push(h('div', { class: 'panel' }, tabButtons([['reviews', '💬 Рецензии'], ['articles', '📚 Оценённые статьи']], state.userTab, (k) => { state.userTab = k; route(); }), content));
+    body.push(h('div', { class: 'panel' }, tabButtons([['reviews', '💬 Рецензии и оценки'], ['articles', '📚 Оценённые статьи']], state.userTab, (k) => { state.userTab = k; route(); }), content));
     box.replaceChildren(...body);
     document.title = `${u.username} — профиль | Закулисье Майнкрафта Вики`;
   }
