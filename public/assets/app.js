@@ -370,7 +370,7 @@
 
     const author = state.idx.authors.get(article.authorId) || { id: 'a1', name: 'Неизвестный автор' };
     head.replaceChildren(h('div', { class: 'rzt-card' },
-      scoreRing(article.avg, 'ring-xl'),
+      (scored(article.reviews).length ? scoreRing(article.avg, 'ring-xl') : h('div', { class: 'score-ring score-ring-empty ring-xl', title: 'Пока нет оценок' }, h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/90'))),
       h('div', { class: 'rzt-details' },
         h('div', { class: 'rzt-tags' }, h('span', { class: 'rzt-tag' }, '📄 Статья вики'), h('span', { class: 'rzt-tag rzt-tag-accent' }, 'Закулисье')),
         h('h2', { class: 'rzt-title' }, article.title),
