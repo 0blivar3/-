@@ -487,12 +487,11 @@ async function importAll(request, env) {
       statements.push(bindReview(env, {
         id: ID_RE.test(rawId) ? rawId : crypto.randomUUID(),
         articleTitle: clean(r.articleTitle, { min: 1, max: LIMITS.article }),
-        reviewTitle: clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
+        reviewTitle: r.hasReview === false ? '' : clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
         authorId: mapped, reviewerKind: kind, reviewerName, reviewerUserId: null,
-        text: clean(r.text || '', { min: r.hasReview === false ? 0 : 1, max: LIMITS.body, multiline: true }),
+        text: r.hasReview === false ? '' : clean(r.text || '', { min: 1, max: LIMITS.body, multiline: true }),
         criteria: r.hasScore === false ? [5, 5, 5, 5, 5] : parseCriteria(r.criteria),
         hasReview: r.hasReview !== false, hasScore: r.hasScore !== false,
-        reviewTitle: r.hasReview === false ? '' : clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
         status: r.status === 'pending' ? 'pending' : 'approved',
         createdAt: Number.isFinite(r.createdAt) ? Math.trunc(r.createdAt) : now - i,
       }));
