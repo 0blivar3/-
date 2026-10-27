@@ -161,7 +161,7 @@ async function uploadUserAvatar(request, env, user) {
   await env.AVATARS.put(key, file.stream(), {
     httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=3600' },
   });
-  const avatar = `/api/avatar/${user.id}`;
+  const avatar = `/api/avatar/${user.id}?v=${Date.now()}`;
   await env.DB.prepare('UPDATE users SET avatar = ? WHERE id = ?').bind(avatar, user.id).run();
   return json({ ok: true, avatar });
 }
