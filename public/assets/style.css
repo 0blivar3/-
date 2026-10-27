@@ -197,7 +197,9 @@ input[type=range]::-moz-range-thumb { height: 18px; width: 18px; border: 0; bord
 .score-total-display { font-size: 1.6rem; font-weight: 900; color: var(--accent-blue); line-height: 1; }
 .score-criteria-display { font-size: 0.82rem; font-family: monospace; font-weight: 700; color: var(--accent-purple-light); letter-spacing: 2px; margin-top: 3px; }
 .ai-reviewer-tag { display: inline-flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.3); color: var(--accent-purple-light); padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; margin-top: 6px; }
-.user-reviewer-tag { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.35); color: #93c5fd; }
+.user-reviewer-tag { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.35); color: #93c5fd; text-decoration: none; }
+.user-reviewer-tag:hover { border-color: var(--accent-blue); color: #fff; }
+.reviewer-avatar { width: 22px; height: 22px; font-size: 0.68rem; border: 1px solid rgba(255, 255, 255, 0.18); }
 .ai-avatar-img { width: 16px; height: 16px; display: inline-block; vertical-align: middle; }
 .review-text { font-size: 0.88rem; color: #d1d5db; white-space: pre-wrap; margin-top: 8px; line-height: 1.5; overflow-wrap: anywhere; }
 .review-date { font-size: 0.72rem; color: var(--text-muted); text-align: right; margin-top: 8px; }
@@ -242,9 +244,11 @@ input[type=range]::-moz-range-thumb { height: 18px; width: 18px; border: 0; bord
 .rzt-circle-gray { background: #1f2433; color: var(--text-muted); font-size: 0.85rem; }
 
 /* Ценность ЗМВ */
-.zmvi-grid-calc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-@media (max-width: 850px) { .zmvi-grid-calc { grid-template-columns: 1fr; } }
-.calc-card { background: var(--card-inner); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.zmvi-grid-calc { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 16px; margin-bottom: 20px; }
+.zmvi-grid-calc > div { display: contents; }
+@media (max-width: 1050px) { .zmvi-grid-calc { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .zmvi-grid-calc { grid-template-columns: 1fr; } }
+.calc-card { background: var(--card-inner); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 0; }
 .calc-card-soft { background: rgba(18, 22, 34, 0.4); }
 .calc-card-title { font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .badge-val { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 2px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
