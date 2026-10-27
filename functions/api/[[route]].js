@@ -36,8 +36,14 @@ const rowToAuthor = (a) => ({
   id: a.id, name: a.name, avatar: a.avatar, bio: a.bio || '', ownerUsername: a.owner || null, updatedAt: a.updated_at || 0,
 });
 
+function publicUserAvatar(id, avatar) {
+  return typeof avatar === 'string' && avatar.startsWith('data:image/webp;base64,')
+    ? `/api/avatar/${id}`
+    : (avatar || '');
+}
+
 const rowToUser = (u) => ({
-  username: u.username, avatar: u.avatar, bio: u.bio, createdAt: u.created_at, banned: !!u.banned,
+  username: u.username, avatar: publicUserAvatar(u.id, u.avatar), bio: u.bio, createdAt: u.created_at, banned: !!u.banned,
 });
 
 const SELECT_REVIEWS = 'SELECT *, (reviewer_user_id IS NOT NULL) AS registered FROM reviews';
@@ -60,8 +66,8 @@ const isUnique = (e) => /UNIQUE|constraint/i.test(String((e && e.message) || e))
 
 async function getData(env, admin) {
   const usersSql = admin
-    ? 'SELECT username, avatar, bio, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
-    : 'SELECT username, avatar, bio, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
+    ? 'SELECT id, username, avatar, bio, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
+    : 'SELECT id, username, avatar, bio, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
   const [authors, reviews, users] = await Promise.all([
     env.DB.prepare(
       'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
@@ -81,7 +87,7 @@ async function meInfo(env, user) {
   if (!user) return { user: null, authorId: null };
   const author = await env.DB.prepare('SELECT id FROM authors WHERE owner_user_id = ?').bind(user.id).first();
   return {
-    user: { username: user.username, avatar: user.avatar, bio: user.bio, createdAt: user.created_at },
+    user: { username: user.username, avatar: publicUserAvatar(user.id, user.avatar), bio: user.bio, createdAt: user.created_at },
     authorId: author ? author.id : null,
   };
 }
@@ -140,41 +146,42 @@ async function updateProfile(request, env, user) {
 }
 
 async function uploadUserAvatar(request, env, user) {
-  if (!env.AVATARS) throw new HttpError(503, 'Загрузка аватарок не настроена: администратору нужно подключить R2-бакет AVATARS в Cloudflare Pages');
   const declared = Number(request.headers.get('Content-Length') || 0);
-  if (declared > 2 * 1024 * 1024 + 65536) throw new HttpError(413, 'Изображение должно быть не больше 2 МБ');
+  if (declared > 2 * 1024 * 1024 + 65536) throw new HttpError(413, 'Исходное изображение должно быть не больше 2 МБ');
   let form;
   try { form = await request.formData(); } catch { throw new HttpError(400, 'Не удалось прочитать загруженный файл'); }
   const file = form.get('avatar');
   if (!file || typeof file.arrayBuffer !== 'function') throw new HttpError(400, 'Выберите изображение');
-  if (!file.size || file.size > 2 * 1024 * 1024) throw new HttpError(413, 'Изображение должно быть не больше 2 МБ');
-  const types = new Set(['image/jpeg', 'image/png', 'image/webp']);
-  if (!types.has(file.type)) throw new HttpError(400, 'Поддерживаются только PNG, JPG и WebP');
+  if (!file.size || file.size > 350 * 1024) throw new HttpError(413, 'После обработки изображение должно быть не больше 350 КБ');
+  if (file.type !== 'image/webp') throw new HttpError(400, 'Изображение не обработано: обновите страницу и попробуйте снова');
   const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const isPng = signature.length >= 8 && signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4e && signature[3] === 0x47 && signature[4] === 0x0d && signature[5] === 0x0a && signature[6] === 0x1a && signature[7] === 0x0a;
-  const isJpeg = signature.length >= 3 && signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff;
   const isWebp = signature.length >= 12 && String.fromCharCode(...signature.slice(0, 4)) === 'RIFF' && String.fromCharCode(...signature.slice(8, 12)) === 'WEBP';
-  if (!(file.type === 'image/png' && isPng) && !(file.type === 'image/jpeg' && isJpeg) && !(file.type === 'image/webp' && isWebp)) {
-    throw new HttpError(400, 'Файл не похож на корректное изображение');
-  }
-  const key = `avatars/${user.id}`;
-  await env.AVATARS.put(key, file.stream(), {
-    httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=3600' },
-  });
-  const avatar = `/api/avatar/${user.id}?v=${Date.now()}`;
+  if (!isWebp) throw new HttpError(400, 'Файл не похож на корректное WebP-изображение');
+
+  const data = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < data.length; i += 0x8000) binary += String.fromCharCode(...data.subarray(i, i + 0x8000));
+  const avatar = `data:image/webp;base64,${btoa(binary)}`;
   await env.DB.prepare('UPDATE users SET avatar = ? WHERE id = ?').bind(avatar, user.id).run();
-  return json({ ok: true, avatar });
+  return json({ ok: true, avatar: `/api/avatar/${user.id}` });
 }
 
 async function getUserAvatar(env, id) {
-  if (!env.AVATARS) throw new HttpError(404, 'Аватар не найден');
-  const object = await env.AVATARS.get(`avatars/${id}`);
-  if (!object) throw new HttpError(404, 'Аватар не найден');
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set('Cache-Control', 'public, max-age=3600');
-  headers.set('X-Content-Type-Options', 'nosniff');
-  return new Response(object.body, { headers });
+  const row = await env.DB.prepare('SELECT avatar FROM users WHERE id = ?').bind(id).first();
+  const match = row && typeof row.avatar === 'string' && row.avatar.match(/^data:image\/webp;base64,([A-Za-z0-9+/]+={0,2})$/);
+  if (!match) throw new HttpError(404, 'Аватар не найден');
+  let binary;
+  try { binary = atob(match[1]); } catch { throw new HttpError(404, 'Аватар не найден'); }
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': 'image/webp',
+      'Content-Length': String(bytes.length),
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 async function changePassword(request, env, user) {
