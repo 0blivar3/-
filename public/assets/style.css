@@ -458,3 +458,25 @@ dialog .sub-tabs { margin-bottom: 14px; }
   .ac-actions { gap: 6px; }
   .article-card-action { padding: 7px 8px; }
 }
+
+
+/* История обновлений */
+.updates-intro { margin-bottom: 24px; }
+.updates-intro .section-title { margin: 0 0 8px; }
+.updates-intro p:last-child { margin-bottom: 0; }
+.eyebrow { margin: 0 0 8px; color: var(--accent, #60a5fa); font-size: .76rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.updates-day { position: relative; margin: 0 0 28px 10px; padding-left: 22px; border-left: 2px solid rgba(96,165,250,.28); }
+.updates-date { position: relative; margin: 0 0 14px; color: var(--text-main); font-size: 1.15rem; }
+.updates-date::before { content: ""; position: absolute; top: .35em; left: -30px; width: 12px; height: 12px; border: 3px solid #0a0b10; border-radius: 50%; background: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,.55); }
+.update-entry { margin: 0 0 12px; padding: 18px 20px; }
+.update-entry-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.update-entry h4 { margin: 0; color: var(--text-main); font-size: 1rem; }
+.update-entry p { margin: 10px 0; color: var(--text-muted); line-height: 1.65; }
+.update-tag { display: inline-flex; padding: 4px 9px; border: 1px solid rgba(96,165,250,.24); border-radius: 999px; background: rgba(96,165,250,.08); color: #93c5fd; font-size: .72rem; font-weight: 700; }
+.update-source { color: #93c5fd; font-size: .82rem; text-decoration: none; }
+.update-source:hover { text-decoration: underline; }
+@media (max-width: 520px) {
+  .updates-day { margin-left: 4px; padding-left: 16px; }
+  .updates-date::before { left: -24px; }
+  .update-entry { padding: 15px; }
+}
