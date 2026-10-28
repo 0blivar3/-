@@ -20,8 +20,8 @@
   };
 
   const state = {
-    authors: [], users: [], reviews: [], pending: [], myReviews: [],
-    me: null, myAuthorId: null, admin: false, loaded: false, config: {}, idx: null,
+    authors: [], users: [], reviews: [], articleDates: [], pending: [], myReviews: [],
+    me: null, myAuthorId: null, admin: false, loaded: false, config: {}, idx: null, prefillRating: null,
     feedLimit: PAGE, authorTab: 'articles', userTab: 'reviews', editingAuthor: null,
     authMode: 'login', turnstileToken: '', turnstileId: null, tsLoading: false, wikiLoaded: false,
   };
@@ -117,8 +117,18 @@
   const emptyBox = (text) => h('div', { class: 'empty' }, text);
 
   /* ---------- индекс данных ---------- */
+  const localDateISO = (timestamp) => {
+    const d = new Date(timestamp);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const fmtArticleDate = (value) => {
+    const match = typeof value === 'string' && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}.${match[2]}.${match[1]}` : '—';
+  };
+
   function buildIndex() {
     const idx = { authors: new Map(), users: new Map(), byAuthor: new Map(), byUser: new Map(), articles: [] };
+    const dateOverrides = new Map((state.articleDates || []).map((item) => [lc(item.articleTitle), item.createdDate]));
     const push = (map, key, r) => { if (!map.has(key)) map.set(key, []); map.get(key).push(r); };
     state.authors.forEach((a) => idx.authors.set(a.id, a));
     state.users.forEach((u) => idx.users.set(lc(u.username), u));
@@ -132,7 +142,14 @@
     }
     idx.articles = [...arts.values()].map((a) => {
       const scores = scored(a.reviews);
-      return { ...a, avg: avg(scores), max: scores.length ? Math.max(...scores.map((r) => r.score)) : 0, latest: Math.max(...a.reviews.map((r) => r.createdAt)) };
+      const first = Math.min(...a.reviews.map((r) => r.createdAt));
+      return {
+        ...a,
+        avg: avg(scores),
+        max: scores.length ? Math.max(...scores.map((r) => r.score)) : 0,
+        latest: Math.max(...a.reviews.map((r) => r.createdAt)),
+        createdDate: dateOverrides.get(lc(a.title)) || localDateISO(first),
+      };
     });
     state.idx = idx;
   }
@@ -184,20 +201,101 @@
         statsRow([[rs.length, 'Рецензий'], [uniqueTitles(all), 'Статей'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. оценка']])));
   }
 
+  const SCORE_CRITERIA = [
+    'Текст / Понятность',
+    'Структура / Вики',
+    'Реализация концепта',
+    'Оригинальность',
+    'Атмосфера / Вайб',
+  ];
+
+  function articleScoreBadge(art, ringClass = '') {
+    const scoreList = scored(art.reviews);
+    const ring = scoreList.length
+      ? scoreRing(art.avg, ringClass)
+      : h('div', { class: `score-ring score-ring-empty ${ringClass}`, title: 'Пока нет оценок' },
+          h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/90'));
+    const criteriaRows = SCORE_CRITERIA.map((name, i) => {
+      const values = scoreList
+        .map((r) => Array.isArray(r.criteria) ? r.criteria[i] : null)
+        .filter((value) => Number.isFinite(value));
+      const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+      return h('div', { class: 'score-tooltip-row' },
+        h('span', null, name),
+        h('strong', null, average === null ? '—' : `${average.toFixed(1)} / 10`));
+    });
+    return h('div', {
+      class: 'score-tooltip-wrap',
+      tabindex: 0,
+      role: 'group',
+      'aria-label': scoreList.length ? `Средний балл ${art.avg.toFixed(1)} из 90. Нажмите или наведите, чтобы увидеть оценки по критериям.` : 'У статьи пока нет оценок',
+    }, ring,
+      h('div', { class: 'score-tooltip', role: 'tooltip' },
+        h('strong', { class: 'score-tooltip-title' }, 'Средние оценки по критериям'),
+        h('div', { class: 'score-tooltip-summary' }, scoreList.length
+          ? `${scoreList.length} ${plural(scoreList.length, ['оценка', 'оценки', 'оценок'])} · ${art.avg.toFixed(1)} / 90`
+          : 'Оценок пока нет'),
+        ...criteriaRows));
+  }
+
+  function openRatingForArticle(art) {
+    state.prefillRating = { title: art.title, authorId: art.authorId };
+    if (location.hash === '#/evaluator') applyPendingRating();
+    else location.hash = '#/evaluator';
+  }
+
   function articleCard(art) {
     const author = state.idx.authors.get(art.authorId);
     const reviewCount = reviewed(art.reviews).length;
     const scoreCount = scored(art.reviews).length;
-    return h('a', { class: 'article-card', href: articleHref(art.title) },
-      scoreCount ? scoreRing(art.avg) : h('div', { class: 'score-ring score-ring-empty', title: 'Пока нет оценок' }, h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/90')),
+    return h('article', { class: 'article-card' },
+      articleScoreBadge(art),
       h('div', { class: 'ac-main' },
-        h('div', { class: 'ac-title' }, art.title),
+        h('a', { class: 'ac-title ac-title-link', href: articleHref(art.title) }, art.title),
         h('div', { class: 'ac-meta' }, 'Автор: ', author ? author.name : 'Неизвестный'),
         h('div', { class: 'ac-chips' },
           h('span', { class: 'chip' }, cnt(reviewCount, F_REV)),
           h('span', { class: 'chip' }, cnt(scoreCount, ['оценка', 'оценки', 'оценок'])),
           h('span', { class: 'chip' }, scoreCount ? `макс. ${art.max}` : 'нет оценок'),
-          h('span', { class: 'chip' }, fmtDay(art.latest)))));
+          h('span', { class: 'chip' }, `Создана: ${fmtArticleDate(art.createdDate)}`),
+          h('span', { class: 'chip' }, `Активность: ${fmtDay(art.latest)}`)),
+        h('div', { class: 'ac-actions' },
+          h('button', { type: 'button', class: 'btn btn-outline article-card-action', onclick: () => openRatingForArticle(art) }, '⭐ Оценить'),
+          h('a', { class: 'btn btn-outline article-card-action', href: articleHref(art.title) }, 'Открыть страницу'))));
+  }
+
+  function articleDateEditor(art) {
+    if (!state.admin) return null;
+    const form = h('form', {
+      class: 'article-date-editor',
+      hidden: true,
+      onsubmit: async (event) => {
+        event.preventDefault();
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        try {
+          await api('/admin/articles/date', { method: 'POST', body: { articleTitle: art.title, createdDate: dateInput.value } });
+          toast('Дата создания статьи обновлена', 'ok');
+          await loadData();
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          submit.disabled = false;
+        }
+      },
+    });
+    const dateInput = h('input', { class: 'input-field', type: 'date', value: art.createdDate, required: true, 'aria-label': 'Дата создания статьи' });
+    form.append(
+      h('label', { class: 'field-label' }, 'Новая дата создания'),
+      dateInput,
+      h('button', { type: 'submit', class: 'btn btn-primary' }, 'Сохранить дату'),
+    );
+    return h('div', { class: 'article-date-tools' },
+      h('button', {
+        type: 'button', class: 'btn btn-outline article-card-action',
+        onclick: () => { form.hidden = !form.hidden; if (!form.hidden) dateInput.focus(); },
+      }, '✏️ Изменить дату'),
+      form);
   }
 
   function reviewerTag(r) {
@@ -370,11 +468,13 @@
 
     const author = state.idx.authors.get(article.authorId) || { id: 'a1', name: 'Неизвестный автор' };
     head.replaceChildren(h('div', { class: 'rzt-card' },
-      (scored(article.reviews).length ? scoreRing(article.avg, 'ring-xl') : h('div', { class: 'score-ring score-ring-empty ring-xl', title: 'Пока нет оценок' }, h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/90'))),
+      articleScoreBadge(article, 'ring-xl'),
       h('div', { class: 'rzt-details' },
         h('div', { class: 'rzt-tags' }, h('span', { class: 'rzt-tag' }, '📄 Статья вики'), h('span', { class: 'rzt-tag rzt-tag-accent' }, 'Закулисье')),
         h('h2', { class: 'rzt-title' }, article.title),
         h('a', { class: 'row-gap author-inline', href: authorHref(author.id) }, avatar(author.name, author.avatar, 'avatar-xs'), 'Автор: ', h('strong', null, author.name)),
+        h('div', { class: 'article-created-date' }, 'Дата создания: ', h('strong', null, fmtArticleDate(article.createdDate))),
+        articleDateEditor(article),
         statsRow([[reviewCount, 'Рецензий'], [scoreReviews.length, 'Оценок'], [scoreReviews.length ? Math.round(article.avg) : '—', 'Ср. балл'], [scoreReviews.length ? article.max : '—', 'Макс. балл'], [scoreReviews.length ? Math.min(...scoreReviews.map((r) => r.score)) : '—', 'Мин. балл']], 'inline-stats'))));
     list.replaceChildren(...rs.map((r) => reviewCard(r)));
     document.title = `${article.title} — рецензии | Закулисье Майнкрафта Вики`;
@@ -629,6 +729,23 @@
   };
   const NAV_OF = { article: 'articles', author: 'authors', user: 'users' };
 
+  function applyPendingRating() {
+    if (!state.prefillRating) return;
+    const target = state.prefillRating;
+    state.prefillRating = null;
+    $('#articleTitle').value = target.title;
+    $('#authorSelect').value = target.authorId;
+    $('#submissionType').value = 'rating';
+    $('#reviewTitle').value = '';
+    $('#reviewText').value = '';
+    $('#textCounter').textContent = '0';
+    updateSubmissionMode();
+    updateScore();
+    saveDraft();
+    $('#articleTitle').focus({ preventScroll: true });
+    toast('Статья выбрана. Выставьте баллы и отправьте оценку.', 'ok');
+  }
+
   function route() {
     if (!state.idx) return;
     const raw = location.hash.replace(/^#\/?/, '');
@@ -681,7 +798,7 @@
     if (name === 'user') renderUserPage(param);
     if (name === 'critics') renderCritics();
     if (name === 'value') recalcZmvi();
-    if (name === 'evaluator') ensureWiki();
+    if (name === 'evaluator') { ensureWiki(); applyPendingRating(); }
     if (name === 'moderation') renderModeration();
     if (name === 'profile') renderProfile();
     if (name === 'search') renderSearch(param);
@@ -751,7 +868,7 @@
     const err = $('#loadError');
     try {
       const data = await api('/data');
-      state.authors = data.authors; state.reviews = data.reviews; state.users = data.users || [];
+      state.authors = data.authors; state.reviews = data.reviews; state.users = data.users || []; state.articleDates = data.articleDates || [];
       state.loaded = true;
       err.hidden = true;
     } catch (e) {
@@ -1034,7 +1151,7 @@
     $('#submitBtn').title = mode === 'rating' ? 'Отправить оценку' : mode === 'review' ? 'Отправить рецензию' : 'Отправить оценку и рецензию';
     $('#submitBtn').setAttribute('aria-label', $('#submitBtn').title);
     $('#moderationNote').textContent = mode === 'rating'
-      ? 'Оценки публикуются после проверки модератором.'
+      ? 'Оценки без рецензии публикуются сразу, без модерации.'
       : mode === 'review'
         ? 'Рецензии без оценки публикуются после проверки модератором.'
         : 'Рецензии и оценки публикуются после проверки модератором.';

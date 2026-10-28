@@ -387,3 +387,65 @@ a.ai-reviewer-tag:hover { background: rgba(59, 130, 246, 0.3); }
 .top-author-row .row-gap { text-decoration: none; }
 dialog .sub-tabs { margin-bottom: 14px; }
 #turnstileBox { margin-bottom: 10px; }
+
+
+/* Обновление 2.1.1: статистика оценок, карточки и дата статьи */
+.score-tooltip-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  cursor: help;
+  border-radius: 50%;
+  outline-offset: 4px;
+}
+.score-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 290px;
+  max-width: calc(100vw - 36px);
+  padding: 12px;
+  border: 1px solid var(--border-accent);
+  border-radius: 10px;
+  background: var(--card-inner);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+  color: var(--text-main);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
+}
+.score-tooltip-wrap:hover .score-tooltip,
+.score-tooltip-wrap:focus .score-tooltip,
+.score-tooltip-wrap:focus-within .score-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.score-tooltip-title { display: block; font-size: .85rem; margin-bottom: 4px; color: #fff; }
+.score-tooltip-summary { font-size: .75rem; color: var(--text-muted); margin-bottom: 8px; }
+.score-tooltip-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--border-color); font-size: .76rem; }
+.score-tooltip-row span { min-width: 0; }
+.score-tooltip-row strong { white-space: nowrap; color: var(--accent-purple-light); }
+.article-card { align-items: flex-start; }
+.ac-main { min-width: 0; flex: 1; }
+.ac-title-link { display: block; text-decoration: none; }
+.ac-title-link:hover { text-decoration: underline; }
+.ac-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.article-card-action { font-size: .78rem; padding: 7px 10px; text-decoration: none; }
+.article-created-date { margin-top: 8px; color: var(--text-muted); font-size: .86rem; }
+.article-date-tools { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; }
+.article-date-editor { width: min(100%, 320px); display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(0,0,0,.15); }
+.article-date-editor[hidden] { display: none !important; }
+.article-date-editor .field-label { margin: 0; }
+@media (max-width: 520px) {
+  .article-card { gap: 10px; padding: 11px; }
+  .article-card .score-ring { width: 54px; height: 54px; border-width: 3px; }
+  .article-card .score-ring .sr-num { font-size: 1.05rem; }
+  .article-card .score-ring .sr-max { font-size: .55rem; }
+  .ac-actions { gap: 6px; }
+  .article-card-action { padding: 7px 8px; }
+}
