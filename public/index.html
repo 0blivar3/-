@@ -19,11 +19,11 @@
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.2.6">
+  <link rel="stylesheet" href="/assets/style.css?v=2.2.7">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
-  <script src="/assets/app.js?v=2.2.6" defer></script>
+  <script src="/assets/app.js?v=2.2.7" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">К содержимому</a>
@@ -52,6 +52,7 @@
     <a class="nav-btn" href="#/critics" data-route="critics">🤖 Критики</a>
     <a class="nav-btn" href="#/evaluator" data-route="evaluator">📝 Оценить статью</a>
     <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
+    <a class="nav-btn" href="#/updates" data-route="updates">🕘 История обновлений</a>
     <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
   </nav>
 
@@ -566,6 +567,74 @@
       </div>
     </section>
 
+
+      <section id="tab-updates" class="tab-content" aria-label="История обновлений сайта">
+      <div class="wrap wrap-1100">
+        <div class="panel updates-intro">
+          <p class="eyebrow">Журнал изменений</p>
+          <h2 class="section-title">🕘 История обновлений сайта</h2>
+          <p class="muted">Здесь собраны функции и исправления, уже вошедшие в основную версию сайта. Даты указаны по дате слияния изменений.</p>
+        </div>
+
+        <div class="updates-day">
+          <h3 class="updates-date"><time datetime="2026-10-28">28 октября 2026</time></h3>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Лайки и понятные оценки критериев</h4><span class="update-tag">Отзывы</span></div>
+            <p>На опубликованных пользовательских рецензиях появились лайки для вошедших в аккаунт пользователей. Нельзя лайкнуть собственную рецензию или поставить повторный лайк. Названия критериев теперь видны рядом с баллами, а оценки четырёх критериев выделены синим цветом и «Атмосфера / вайб» — фиолетовым.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/11" target="_blank" rel="noopener noreferrer">PR #11 · 28.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Оценивание перенесено на страницу статьи</h4><span class="update-tag">Исправление</span></div>
+            <p>Кнопка оценивания находится на странице конкретной статьи, где статья и автор уже выбраны. Подсказки со средними баллами по критериям отображаются поверх соседних карточек.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/10" target="_blank" rel="noopener noreferrer">PR #10 · 28.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Оценки и даты статей</h4><span class="update-tag">Обновление 2.1.1</span></div>
+            <p>В карточках добавлены переход к статье и быстрое оценивание. Подсказка среднего балла показывает оценки по пяти критериям; на странице статьи отображается дата создания, которую администратор может исправить. Даты входят в экспорт и импорт резервной копии.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/9" target="_blank" rel="noopener noreferrer">PR #9 · 28.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Оценки без рецензии публикуются сразу</h4><span class="update-tag">Улучшение</span></div>
+            <p>Отправленные отдельно оценки появляются на сайте без ожидания модерации. Рецензии с текстом, как и прежде, проходят модерацию.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/8" target="_blank" rel="noopener noreferrer">PR #8 · 28.10.2026</a>
+          </article>
+        </div>
+
+        <div class="updates-day">
+          <h3 class="updates-date"><time datetime="2026-10-27">27 октября 2026</time></h3>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Исправлена загрузка профилей авторов</h4><span class="update-tag">Исправление</span></div>
+            <p>Устранена ошибка группировки записей по статьям, из-за которой профиль автора мог не загружаться при нескольких записях для одной статьи.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/7" target="_blank" rel="noopener noreferrer">PR #7 · 27.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Независимые оценки и рецензии</h4><span class="update-tag">Обновление 2.1</span></div>
+            <p>Теперь можно отправить оценку и рецензию вместе или по отдельности. Для оценок и рецензий отдельно считаются показатели, а тип записи сохраняется в резервных копиях.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/6" target="_blank" rel="noopener noreferrer">PR #6 · 27.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Критерии, ссылки и избранное в профиле</h4><span class="update-tag">Обновление 2.1</span></div>
+            <p>Критерии оценивания открываются в отдельном окне формы. В профиле появились ссылки на внешние площадки, список любимых авторов и избранных статей.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/5" target="_blank" rel="noopener noreferrer">PR #5 · 27.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Аватары хранятся в D1</h4><span class="update-tag">Обновление 2.2.1</span></div>
+            <p>Зависимость от R2 для аватаров удалена. Изображения уменьшаются и сохраняются в существующем поле базы данных.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/4" target="_blank" rel="noopener noreferrer">PR #4 · 27.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Прямые ссылки на рецензии и загрузка аватаров</h4><span class="update-tag">Обновление 2.2</span></div>
+            <p>Опубликованной рецензией можно поделиться по прямой ссылке: она открывает нужную статью и выделяет отзыв. В профиле можно загрузить аватар, который автоматически уменьшается для хранения.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/2" target="_blank" rel="noopener noreferrer">PR #2 · 27.10.2026</a>
+          </article>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Обновлён калькулятор и карточки отзывов</h4><span class="update-tag">Обновление 2.1</span></div>
+            <p>Итог калькулятора ценности перемещён под поля, форма адаптируется к ширине экрана, а в отзывах показываются аватары зарегистрированных пользователей.</p>
+            <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/1" target="_blank" rel="noopener noreferrer">PR #1 · 27.10.2026</a>
+          </article>
+        </div>
+      </div>
+    </section>
 
   </main>
 
