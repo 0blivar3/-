@@ -61,6 +61,15 @@ CREATE INDEX IF NOT EXISTS idx_reviews_status  ON reviews (status, created_at DE
 CREATE INDEX IF NOT EXISTS idx_reviews_article ON reviews (article_title COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_reviews_user    ON reviews (reviewer_user_id);
 
+CREATE TABLE IF NOT EXISTS review_likes (
+  review_id  TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (review_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_likes_user ON review_likes (user_id);
+
 CREATE TABLE IF NOT EXISTS rate_limit (
   kind    TEXT NOT NULL,
   ip_hash TEXT NOT NULL,

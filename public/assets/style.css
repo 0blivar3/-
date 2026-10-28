@@ -196,7 +196,11 @@ input[type=range]::-moz-range-thumb { height: 18px; width: 18px; border: 0; bord
 .review-article-title:hover { color: var(--accent-blue); text-decoration: underline; }
 .score-breakdown-box { text-align: right; flex-shrink: 0; }
 .score-total-display { font-size: 1.6rem; font-weight: 900; color: var(--accent-blue); line-height: 1; }
-.score-criteria-display { font-size: 0.82rem; font-family: monospace; font-weight: 700; color: var(--accent-purple-light); letter-spacing: 2px; margin-top: 3px; }
+.score-criteria-display { display: flex; justify-content: flex-end; gap: 5px; font-size: 0.82rem; font-family: monospace; font-weight: 700; letter-spacing: 0; margin-top: 3px; }
+.criterion-score { display: inline-grid; place-items: center; min-width: 1.35em; border-radius: 4px; cursor: help; }
+.criterion-score-standard { color: #60a5fa; }
+.criterion-score-atmosphere { color: var(--accent-purple-light); }
+.criterion-score:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .ai-reviewer-tag { display: inline-flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.3); color: var(--accent-purple-light); padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; margin-top: 6px; }
 .user-reviewer-tag { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.35); color: #93c5fd; text-decoration: none; }
 .user-reviewer-tag:hover { border-color: var(--accent-blue); color: #fff; }
@@ -205,6 +209,8 @@ input[type=range]::-moz-range-thumb { height: 18px; width: 18px; border: 0; bord
 .review-text { font-size: 0.88rem; color: #d1d5db; white-space: pre-wrap; margin-top: 8px; line-height: 1.5; overflow-wrap: anywhere; }
 .review-date { font-size: 0.72rem; color: var(--text-muted); text-align: right; margin-top: 8px; }
 .review-actions { display: flex; gap: 8px; margin-top: 8px; }
+.review-like { min-width: 54px; }
+.review-like.is-liked { color: #93c5fd; border-color: rgba(59, 130, 246, 0.55); }
 
 /* Авторы */
 .author-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px; }
