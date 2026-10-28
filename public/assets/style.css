@@ -402,7 +402,6 @@ dialog .sub-tabs { margin-bottom: 14px; }
   outline-offset: 4px;
 }
 .score-tooltip {
-  z-index: 30;
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
@@ -439,6 +438,7 @@ dialog .sub-tabs { margin-bottom: 14px; }
 .ac-title-link:hover { text-decoration: underline; }
 .ac-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .article-card-action { font-size: .78rem; padding: 7px 10px; text-decoration: none; }
+.article-detail-actions { margin: 10px 0; }
 .article-created-date { margin-top: 8px; color: var(--text-muted); font-size: .86rem; }
 .article-date-tools { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; }
 .article-date-editor { width: min(100%, 320px); display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(0,0,0,.15); }
