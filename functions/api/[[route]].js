@@ -31,6 +31,8 @@ function rowToReview(r) {
     score: r.has_score === 0 ? null : r.score,
     status: r.status,
     createdAt: r.created_at,
+    likes: Number(r.likes || 0),
+    likedByMe: !!r.liked_by_me,
   };
 }
 
@@ -72,7 +74,7 @@ const isUnique = (e) => /UNIQUE|constraint/i.test(String((e && e.message) || e))
 
 /* ---------- публичные данные ---------- */
 
-async function getData(env, admin) {
+async function getData(env, admin, userId) {
   const usersSql = admin
     ? 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
     : 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
@@ -81,7 +83,12 @@ async function getData(env, admin) {
       'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
       'LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC, a.name ASC',
     ).all(),
-    env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'approved' ORDER BY created_at DESC LIMIT 3000`).all(),
+    env.DB.prepare(
+      'SELECT reviews.*, (reviews.reviewer_user_id IS NOT NULL) AS registered, COUNT(review_likes.user_id) AS likes, ' +
+      'MAX(CASE WHEN review_likes.user_id = ? THEN 1 ELSE 0 END) AS liked_by_me ' +
+      'FROM reviews LEFT JOIN review_likes ON review_likes.review_id = reviews.id ' +
+      "WHERE reviews.status = 'approved' GROUP BY reviews.id ORDER BY reviews.created_at DESC LIMIT 3000",
+    ).bind(userId || '').all(),
     env.DB.prepare(usersSql).all(),
     env.DB.prepare('SELECT article_title, created_date FROM article_dates ORDER BY article_title COLLATE NOCASE').all(),
   ]);
@@ -91,6 +98,19 @@ async function getData(env, admin) {
     users: users.results.map(rowToUser),
     articleDates: articleDates.results.map((row) => ({ articleTitle: row.article_title, createdDate: row.created_date })),
   };
+}
+
+async function likeReview(env, user, reviewId) {
+  await rateLimit(env, 'review-like', user.id, 30, 3600);
+  const review = await env.DB.prepare(
+    "SELECT reviewer_user_id FROM reviews WHERE id = ? AND status = 'approved' AND reviewer_kind = 'user' AND has_review = 1",
+  ).bind(reviewId).first();
+  if (!review) throw new HttpError(404, 'Рецензия не найдена');
+  if (review.reviewer_user_id === user.id) throw new HttpError(403, 'Нельзя поставить лайк своей рецензии');
+  await env.DB.prepare('INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (?, ?, ?)')
+    .bind(reviewId, user.id, Date.now()).run();
+  const result = await env.DB.prepare('SELECT COUNT(*) AS likes FROM review_likes WHERE review_id = ?').bind(reviewId).first();
+  return json({ ok: true, likes: Number(result?.likes || 0), likedByMe: true });
 }
 
 async function meInfo(env, user) {
@@ -252,6 +272,7 @@ async function changePassword(request, env, user) {
 function deleteUserStatements(env, userId) {
   return [
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM review_likes WHERE user_id = ?').bind(userId),
     env.DB.prepare('UPDATE reviews SET reviewer_user_id = NULL WHERE reviewer_user_id = ?').bind(userId),
     env.DB.prepare('UPDATE authors SET owner_user_id = NULL WHERE owner_user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
@@ -591,7 +612,10 @@ export async function onRequest({ request, env }) {
         limits: { body: LIMITS.body, bio: LIMITS.bio },
       });
     }
-    if (path === '/api/data' && method === 'GET') return json(await getData(env, await isAdmin(request, env)));
+    if (path === '/api/data' && method === 'GET') {
+      const [admin, user] = await Promise.all([isAdmin(request, env), getSessionUser(request, env)]);
+      return json(await getData(env, admin, user?.id));
+    }
     let avatarMatch = path.match(/^\/api\/avatar\/([A-Za-z0-9_-]{1,64})$/);
     if (avatarMatch && method === 'GET') return await getUserAvatar(env, avatarMatch[1]);
 
@@ -613,6 +637,8 @@ export async function onRequest({ request, env }) {
       const [user, admin] = await Promise.all([getSessionUser(request, env), isAdmin(request, env)]);
       return await createReview(request, env, user, admin);
     }
+    const likeMatch = path.match(/^\/api\/reviews\/([A-Za-z0-9_-]{1,64})\/like$/);
+    if (likeMatch && method === 'POST') return await likeReview(env, await needUser(), likeMatch[1]);
 
     if (path === '/api/authors' && method === 'POST') return await createOwnAuthor(request, env, await needUser());
     let m = path.match(/^\/api\/authors\/([A-Za-z0-9_-]{1,64})$/);

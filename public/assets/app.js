@@ -352,6 +352,16 @@
     }
     const hasReview = r.hasReview !== false;
     const hasScore = r.hasScore !== false;
+    const ownReview = state.me && lc(r.reviewerName) === lc(state.me.username);
+    if (r.status === 'approved' && r.reviewerKind === 'user' && hasReview) {
+      actions.push(h('button', {
+        type: 'button',
+        class: `btn btn-outline review-like${r.likedByMe ? ' is-liked' : ''}`,
+        disabled: !!r.likedByMe || !!ownReview,
+        title: ownReview ? 'Нельзя поставить лайк своей рецензии' : r.likedByMe ? 'Вы уже поставили лайк' : 'Нравится рецензия',
+        onclick: () => likeReview(r.id),
+      }, `👍 ${Number(r.likes || 0)}`));
+    }
     const reviewText = hasReview ? r.text : 'Пользователь поставил оценку без текстовой рецензии.';
     const long = hasReview && r.text.length > 700;
     const text = h('div', { class: 'review-text' + (long ? ' clamped' : '') + (!hasReview ? ' muted' : '') }, reviewText);
@@ -368,7 +378,13 @@
             h('a', { class: 'review-article-title', href: authorHref(r.authorId) }, 'Автор: ' + author.name))),
         hasScore ? h('div', { class: 'score-breakdown-box' },
           h('div', { class: 'score-total-display' }, String(r.score), h('span', { class: 'muted small' }, ' / 90')),
-          h('div', { class: 'score-criteria-display', title: 'Критерии' }, r.criteria.join(' ')))
+          h('div', { class: 'score-criteria-display', 'aria-label': `Оценки по критериям: ${r.criteria.map((value, i) => `${SCORE_CRITERIA[i]} — ${value} из 10`).join('; ')}` },
+            ...r.criteria.map((value, i) => h('span', {
+              class: `criterion-score ${i === 4 ? 'criterion-score-atmosphere' : 'criterion-score-standard'}`,
+              title: `${SCORE_CRITERIA[i]}: ${value} из 10`,
+              'aria-label': `${SCORE_CRITERIA[i]}: ${value} из 10`,
+              tabindex: 0,
+            }, String(value)))))
           : h('div', { class: 'review-no-score muted small' }, 'Без оценки')),
       h('div', { class: 'row-gap' }, reviewerTag(r),
         showStatus ? h('span', { class: `chip ${r.status === 'approved' ? 'chip-ok' : 'chip-warn'}` }, r.status === 'approved' ? '✓ Опубликовано' : '⏳ На модерации') : null),
@@ -647,6 +663,14 @@
     body.push(h('div', { class: 'panel' }, tabButtons([['reviews', '💬 Рецензии и оценки'], ['articles', '📚 Оценённые статьи']], state.userTab, (k) => { state.userTab = k; route(); }), content));
     box.replaceChildren(...body);
     document.title = `${u.username} — профиль | Закулисье Майнкрафта Вики`;
+  }
+
+  async function likeReview(id) {
+    if (!state.me) { toast('Войдите в аккаунт, чтобы поставить лайк', 'error'); return; }
+    try {
+      await api(`/reviews/${encodeURIComponent(id)}/like`, { method: 'POST', body: {} });
+      await loadData();
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   function renderSearch(q) {
