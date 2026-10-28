@@ -286,15 +286,18 @@ async function createReview(request, env, user, admin) {
     reviewerUserId = user.id;
   }
 
-  if (!admin) {
-    await rateLimit(env, 'review', user.id, 5, 3600);
-    const pending = await env.DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").first();
-    if (pending && pending.n >= 300) throw new HttpError(503, 'Очередь модерации переполнена, попробуйте позже');
-  }
-
   const hasReview = body.hasReview !== false;
   const hasScore = body.hasScore !== false;
   if (!hasReview && !hasScore) throw new HttpError(400, 'Выберите рецензию, оценку или оба варианта');
+
+  if (!admin) {
+    await rateLimit(env, 'review', user.id, 5, 3600);
+    // Оценки без текстовой рецензии публикуются сразу и не занимают очередь модерации.
+    if (hasReview || !hasScore) {
+      const pending = await env.DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").first();
+      if (pending && pending.n >= 300) throw new HttpError(503, 'Очередь модерации переполнена, попробуйте позже');
+    }
+  }
   let articleTitle = clean(body.articleTitle, { min: 2, max: LIMITS.article, label: 'Название статьи' });
   const reviewTitle = hasReview ? clean(body.reviewTitle, { min: 2, max: LIMITS.title, label: 'Заголовок рецензии' }) : '';
   const text = hasReview ? clean(body.text, { min: LIMITS.minBody, max: LIMITS.body, multiline: true, label: 'Текст рецензии' }) : '';
@@ -310,7 +313,7 @@ async function createReview(request, env, user, admin) {
 
   const review = {
     id: crypto.randomUUID(), articleTitle, reviewTitle, authorId, reviewerKind, reviewerName, reviewerUserId, text, criteria, hasReview, hasScore,
-    status: admin ? 'approved' : 'pending', createdAt: Date.now(),
+    status: admin || (!hasReview && hasScore) ? 'approved' : 'pending', createdAt: Date.now(),
   };
   await bindReview(env, review).run();
   return json({ ok: true, status: review.status, id: review.id }, 201);
