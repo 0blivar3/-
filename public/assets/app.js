@@ -260,7 +260,6 @@
           h('span', { class: 'chip' }, `Создана: ${fmtArticleDate(art.createdDate)}`),
           h('span', { class: 'chip' }, `Активность: ${fmtDay(art.latest)}`)),
         h('div', { class: 'ac-actions' },
-          h('button', { type: 'button', class: 'btn btn-outline article-card-action', onclick: () => openRatingForArticle(art) }, '⭐ Оценить'),
           h('a', { class: 'btn btn-outline article-card-action', href: articleHref(art.title) }, 'Открыть страницу'))));
   }
 
@@ -475,6 +474,8 @@
         h('a', { class: 'row-gap author-inline', href: authorHref(author.id) }, avatar(author.name, author.avatar, 'avatar-xs'), 'Автор: ', h('strong', null, author.name)),
         h('div', { class: 'article-created-date' }, 'Дата создания: ', h('strong', null, fmtArticleDate(article.createdDate))),
         articleDateEditor(article),
+        h('div', { class: 'article-detail-actions' },
+          h('button', { type: 'button', class: 'btn btn-purple', onclick: () => openRatingForArticle(article) }, '⭐ Оценить эту статью')),
         statsRow([[reviewCount, 'Рецензий'], [scoreReviews.length, 'Оценок'], [scoreReviews.length ? Math.round(article.avg) : '—', 'Ср. балл'], [scoreReviews.length ? article.max : '—', 'Макс. балл'], [scoreReviews.length ? Math.min(...scoreReviews.map((r) => r.score)) : '—', 'Мин. балл']], 'inline-stats'))));
     list.replaceChildren(...rs.map((r) => reviewCard(r)));
     document.title = `${article.title} — рецензии | Закулисье Майнкрафта Вики`;
