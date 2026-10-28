@@ -76,18 +76,20 @@ async function getData(env, admin) {
   const usersSql = admin
     ? 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
     : 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
-  const [authors, reviews, users] = await Promise.all([
+  const [authors, reviews, users, articleDates] = await Promise.all([
     env.DB.prepare(
       'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
       'LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC, a.name ASC',
     ).all(),
     env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'approved' ORDER BY created_at DESC LIMIT 3000`).all(),
     env.DB.prepare(usersSql).all(),
+    env.DB.prepare('SELECT article_title, created_date FROM article_dates ORDER BY article_title COLLATE NOCASE').all(),
   ]);
   return {
     authors: authors.results.map(rowToAuthor),
     reviews: reviews.results.map(rowToReview),
     users: users.results.map(rowToUser),
+    articleDates: articleDates.results.map((row) => ({ articleTitle: row.article_title, createdDate: row.created_date })),
   };
 }
 
@@ -269,6 +271,34 @@ async function deleteAccount(request, env, user) {
 
 /* ---------- рецензии ---------- */
 
+function validateArticleDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new HttpError(400, 'Укажите дату в формате ГГГГ-ММ-ДД');
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new HttpError(400, 'Указана несуществующая дата');
+  }
+  return value;
+}
+
+async function setArticleDate(request, env) {
+  const body = await readJson(request, 4 * 1024);
+  const requestedTitle = clean(body.articleTitle, { min: 2, max: LIMITS.article, label: 'Название статьи' });
+  const article = await env.DB.prepare(
+    'SELECT article_title FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1',
+  ).bind(requestedTitle).first();
+  if (!article) throw new HttpError(404, 'Статья не найдена');
+  const createdDate = validateArticleDate(body.createdDate);
+  const articleTitle = article.article_title;
+  const articleKey = articleTitle.normalize('NFC').toLowerCase();
+  await env.DB.prepare(
+    'INSERT INTO article_dates (article_key, article_title, created_date, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(article_key) DO UPDATE SET article_title = excluded.article_title, created_date = excluded.created_date, updated_at = excluded.updated_at',
+  ).bind(articleKey, articleTitle, createdDate, Date.now()).run();
+  return json({ ok: true, articleTitle, createdDate });
+}
+
 async function createReview(request, env, user, admin) {
   const body = await readJson(request, 64 * 1024);
 
@@ -431,12 +461,19 @@ async function adminUserAction(request, env, username, action) {
 }
 
 async function exportAll(env) {
-  const [authors, reviews] = await Promise.all([
+  const [authors, reviews, articleDates] = await Promise.all([
     env.DB.prepare('SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC').all(),
     env.DB.prepare(`${SELECT_REVIEWS} ORDER BY created_at DESC`).all(),
+    env.DB.prepare('SELECT article_title, created_date FROM article_dates ORDER BY article_title COLLATE NOCASE').all(),
   ]);
   // Аккаунты и пароли в экспорт не попадают.
-  return json({ version: 3, exportedAt: new Date().toISOString(), authors: authors.results.map(rowToAuthor), reviews: reviews.results.map(rowToReview) });
+  return json({
+    version: 4,
+    exportedAt: new Date().toISOString(),
+    authors: authors.results.map(rowToAuthor),
+    reviews: reviews.results.map(rowToReview),
+    articleDates: articleDates.results.map((row) => ({ articleTitle: row.article_title, createdDate: row.created_date })),
+  });
 }
 
 async function importAll(request, env) {
@@ -444,8 +481,9 @@ async function importAll(request, env) {
   // Поддерживается и старый формат (authorsData / reviewsData), и новый (authors / reviews).
   const rawAuthors = Array.isArray(body.authors) ? body.authors : Array.isArray(body.authorsData) ? body.authorsData : [];
   const rawReviews = Array.isArray(body.reviews) ? body.reviews : Array.isArray(body.reviewsData) ? body.reviewsData : [];
-  if (rawAuthors.length > 500 || rawReviews.length > 5000) throw new HttpError(413, 'Слишком много записей');
-  if (!rawAuthors.length && !rawReviews.length) throw new HttpError(400, 'В файле нет данных для импорта');
+  const rawArticleDates = Array.isArray(body.articleDates) ? body.articleDates : [];
+  if (rawAuthors.length > 500 || rawReviews.length > 5000 || rawArticleDates.length > 5000) throw new HttpError(413, 'Слишком много записей');
+  if (!rawAuthors.length && !rawReviews.length && !rawArticleDates.length) throw new HttpError(400, 'В файле нет данных для импорта');
 
   const idMap = new Map();
   const statements = [];
@@ -503,7 +541,27 @@ async function importAll(request, env) {
   });
 
   for (let i = 0; i < statements.length; i += 80) await env.DB.batch(statements.slice(i, i + 80));
-  return json({ ok: true, authorsAdded, reviewsProcessed: reviewsPrepared, skipped });
+
+  let articleDatesImported = 0;
+  for (const item of rawArticleDates) {
+    try {
+      if (!item || typeof item !== 'object') throw new Error('bad article date');
+      const requestedTitle = clean(item.articleTitle, { min: 2, max: LIMITS.article, label: 'Название статьи' });
+      const article = await env.DB.prepare(
+        'SELECT article_title FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1',
+      ).bind(requestedTitle).first();
+      if (!article) throw new Error('unknown article');
+      const createdDate = validateArticleDate(item.createdDate);
+      const articleTitle = article.article_title;
+      const articleKey = articleTitle.normalize('NFC').toLowerCase();
+      await env.DB.prepare(
+        'INSERT INTO article_dates (article_key, article_title, created_date, updated_at) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(article_key) DO UPDATE SET article_title = excluded.article_title, created_date = excluded.created_date, updated_at = excluded.updated_at',
+      ).bind(articleKey, articleTitle, createdDate, now).run();
+      articleDatesImported++;
+    } catch { skipped++; }
+  }
+  return json({ ok: true, authorsAdded, reviewsProcessed: reviewsPrepared, articleDatesImported, skipped });
 }
 
 /* ---------- маршрутизатор ---------- */
@@ -580,6 +638,8 @@ export async function onRequest({ request, env }) {
 
     if (path.startsWith('/api/admin/')) {
       if (!(await isAdmin(request, env))) throw new HttpError(401, 'Требуется вход администратора');
+
+      if (path === '/api/admin/articles/date' && method === 'POST') return await setArticleDate(request, env);
 
       if (path === '/api/admin/pending' && method === 'GET') {
         const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'pending' ORDER BY created_at ASC LIMIT 500`).all();
