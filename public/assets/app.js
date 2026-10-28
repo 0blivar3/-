@@ -1172,7 +1172,8 @@
     });
     $('#createArticleForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const submit = event.currentTarget.querySelector('button[type="submit"]');
+      const form = event.currentTarget;
+      const submit = form.querySelector('button[type="submit"]');
       submit.disabled = true;
       try {
         await api('/admin/articles', { method: 'POST', body: {
@@ -1181,8 +1182,8 @@
           createdDate: $('#newArticleDate').value,
           wikiUrl: $('#newArticleUrl').value,
         } });
-        event.currentTarget.reset();
-        event.currentTarget.hidden = true;
+        form.reset();
+        form.hidden = true;
         toast('Статья добавлена в каталог', 'ok');
         await loadData();
       } catch (error) {
