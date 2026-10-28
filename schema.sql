@@ -69,5 +69,12 @@ CREATE TABLE IF NOT EXISTS rate_limit (
 
 CREATE INDEX IF NOT EXISTS idx_rate ON rate_limit (kind, ip_hash, ts);
 
+CREATE TABLE IF NOT EXISTS article_dates (
+  article_key   TEXT PRIMARY KEY,
+  article_title TEXT NOT NULL,
+  created_date  TEXT NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+
 INSERT OR IGNORE INTO authors (id, name, avatar, created_at)
 VALUES ('a1', 'Неизвестный Автор', '', 0);
