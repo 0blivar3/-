@@ -85,5 +85,14 @@ CREATE TABLE IF NOT EXISTS article_dates (
   updated_at    INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS articles (
+  article_key   TEXT PRIMARY KEY,
+  article_title TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  author_id     TEXT NOT NULL,
+  created_date  TEXT NOT NULL,
+  wiki_url      TEXT NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+
 INSERT OR IGNORE INTO authors (id, name, avatar, created_at)
 VALUES ('a1', 'Неизвестный Автор', '', 0);

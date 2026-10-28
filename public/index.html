@@ -388,6 +388,20 @@
               <option value="name">По алфавиту</option>
             </select>
           </div>
+          <div class="admin-only article-catalog-tools">
+            <button type="button" class="btn btn-outline" id="toggleArticleFormBtn">+ Добавить статью</button>
+            <form id="createArticleForm" class="article-create-form" hidden novalidate>
+              <label class="field-label" for="newArticleTitle">Название статьи</label>
+              <input id="newArticleTitle" class="input-field" type="text" minlength="2" maxlength="150" required autocomplete="off">
+              <label class="field-label" for="newArticleAuthor">Автор</label>
+              <select id="newArticleAuthor" class="input-field" required></select>
+              <label class="field-label" for="newArticleDate">Дата создания</label>
+              <input id="newArticleDate" class="input-field" type="date" required>
+              <label class="field-label" for="newArticleUrl">Ссылка на статью в ЗМВ</label>
+              <input id="newArticleUrl" class="input-field" type="url" maxlength="2048" required placeholder="https://minecraft-backrooms.fandom.com/ru/wiki/…">
+              <button type="submit" class="btn btn-primary">Добавить статью</button>
+            </form>
+          </div>
           <div class="article-grid" id="articlesGrid"></div>
         </div>
       </div>
