@@ -20,7 +20,7 @@
   };
 
   const state = {
-    authors: [], users: [], reviews: [], articleDates: [], pending: [], myReviews: [],
+    authors: [], users: [], reviews: [], articleDates: [], articles: [], pending: [], myReviews: [],
     me: null, myAuthorId: null, admin: false, loaded: false, config: {}, idx: null, prefillRating: null,
     feedLimit: PAGE, authorTab: 'articles', userTab: 'reviews', editingAuthor: null,
     authMode: 'login', turnstileToken: '', turnstileId: null, tsLoading: false, wikiLoaded: false,
@@ -132,7 +132,7 @@
     const push = (map, key, r) => { if (!map.has(key)) map.set(key, []); map.get(key).push(r); };
     state.authors.forEach((a) => idx.authors.set(a.id, a));
     state.users.forEach((u) => idx.users.set(lc(u.username), u));
-    const arts = new Map();
+    const arts = new Map((state.articles || []).map((a) => [lc(a.title), { ...a, reviews: [] }]));
     for (const r of state.reviews) {
       push(idx.byAuthor, r.authorId, r);
       if (r.registered && r.reviewerKind === 'user') push(idx.byUser, lc(r.reviewerName), r);
@@ -142,13 +142,13 @@
     }
     idx.articles = [...arts.values()].map((a) => {
       const scores = scored(a.reviews);
-      const first = Math.min(...a.reviews.map((r) => r.createdAt));
+      const first = a.reviews.length ? Math.min(...a.reviews.map((r) => r.createdAt)) : 0;
       return {
         ...a,
         avg: avg(scores),
         max: scores.length ? Math.max(...scores.map((r) => r.score)) : 0,
-        latest: Math.max(...a.reviews.map((r) => r.createdAt)),
-        createdDate: dateOverrides.get(lc(a.title)) || localDateISO(first),
+        latest: a.reviews.length ? Math.max(...a.reviews.map((r) => r.createdAt)) : 0,
+        createdDate: a.createdDate || dateOverrides.get(lc(a.title)) || (first ? localDateISO(first) : ''),
       };
     });
     state.idx = idx;
@@ -258,7 +258,8 @@
           h('span', { class: 'chip' }, cnt(scoreCount, ['оценка', 'оценки', 'оценок'])),
           h('span', { class: 'chip' }, scoreCount ? `макс. ${art.max}` : 'нет оценок'),
           h('span', { class: 'chip' }, `Создана: ${fmtArticleDate(art.createdDate)}`),
-          h('span', { class: 'chip' }, `Активность: ${fmtDay(art.latest)}`)),
+          art.latest ? h('span', { class: 'chip' }, `Активность: ${fmtDay(art.latest)}`) : null,
+          art.wikiUrl ? h('a', { class: 'chip', href: art.wikiUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Статья в ЗМВ ↗') : null),
         h('div', { class: 'ac-actions' },
           h('a', { class: 'btn btn-outline article-card-action', href: articleHref(art.title) }, 'Открыть страницу'))));
   }
@@ -489,6 +490,7 @@
         h('h2', { class: 'rzt-title' }, article.title),
         h('a', { class: 'row-gap author-inline', href: authorHref(author.id) }, avatar(author.name, author.avatar, 'avatar-xs'), 'Автор: ', h('strong', null, author.name)),
         h('div', { class: 'article-created-date' }, 'Дата создания: ', h('strong', null, fmtArticleDate(article.createdDate))),
+        article.wikiUrl ? h('div', { class: 'article-detail-actions' }, h('a', { class: 'btn btn-outline', href: article.wikiUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Открыть статью в ЗМВ ↗')) : null,
         articleDateEditor(article),
         h('div', { class: 'article-detail-actions' },
           h('button', { type: 'button', class: 'btn btn-purple', onclick: () => openRatingForArticle(article) }, '⭐ Оценить эту статью')),
@@ -773,6 +775,12 @@
 
   function route() {
     if (!state.idx) return;
+    const articleAuthorSelect = $('#newArticleAuthor');
+    if (articleAuthorSelect) {
+      const currentAuthor = articleAuthorSelect.value;
+      articleAuthorSelect.replaceChildren(h('option', { value: '' }, 'Выберите автора'), ...state.authors.map((a) => h('option', { value: a.id }, a.name)));
+      if (state.authors.some((a) => a.id === currentAuthor)) articleAuthorSelect.value = currentAuthor;
+    }
     const raw = location.hash.replace(/^#\/?/, '');
     const [nameRaw, ...rest] = raw.split('/');
     let name = Object.hasOwn(TITLES, nameRaw) || nameRaw === 'review' ? nameRaw : 'home';
@@ -893,7 +901,7 @@
     const err = $('#loadError');
     try {
       const data = await api('/data');
-      state.authors = data.authors; state.reviews = data.reviews; state.users = data.users || []; state.articleDates = data.articleDates || [];
+      state.authors = data.authors; state.reviews = data.reviews; state.users = data.users || []; state.articleDates = data.articleDates || []; state.articles = data.articles || [];
       state.loaded = true;
       err.hidden = true;
     } catch (e) {
@@ -1155,6 +1163,33 @@
         toast('Автор добавлен', 'ok');
         await loadData();
       } catch (err) { toast(err.message, 'error'); }
+    });
+
+    $('#toggleArticleFormBtn').addEventListener('click', () => {
+      const form = $('#createArticleForm');
+      form.hidden = !form.hidden;
+      if (!form.hidden) $('#newArticleTitle').focus();
+    });
+    $('#createArticleForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const submit = event.currentTarget.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      try {
+        await api('/admin/articles', { method: 'POST', body: {
+          title: $('#newArticleTitle').value,
+          authorId: $('#newArticleAuthor').value,
+          createdDate: $('#newArticleDate').value,
+          wikiUrl: $('#newArticleUrl').value,
+        } });
+        event.currentTarget.reset();
+        event.currentTarget.hidden = true;
+        toast('Статья добавлена в каталог', 'ok');
+        await loadData();
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        submit.disabled = false;
+      }
     });
   }
 

@@ -78,7 +78,7 @@ async function getData(env, admin, userId) {
   const usersSql = admin
     ? 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
     : 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
-  const [authors, reviews, users, articleDates] = await Promise.all([
+  const [authors, reviews, users, articleDates, articles] = await Promise.all([
     env.DB.prepare(
       'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
       'LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC, a.name ASC',
@@ -91,12 +91,14 @@ async function getData(env, admin, userId) {
     ).bind(userId || '').all(),
     env.DB.prepare(usersSql).all(),
     env.DB.prepare('SELECT article_title, created_date FROM article_dates ORDER BY article_title COLLATE NOCASE').all(),
+    env.DB.prepare('SELECT article_title, author_id, created_date, wiki_url FROM articles ORDER BY article_title COLLATE NOCASE').all(),
   ]);
   return {
     authors: authors.results.map(rowToAuthor),
     reviews: reviews.results.map(rowToReview),
     users: users.results.map(rowToUser),
     articleDates: articleDates.results.map((row) => ({ articleTitle: row.article_title, createdDate: row.created_date })),
+    articles: articles.results.map((row) => ({ title: row.article_title, authorId: row.author_id, createdDate: row.created_date, wikiUrl: row.wiki_url })),
   };
 }
 
@@ -309,8 +311,14 @@ async function setArticleDate(request, env) {
   const article = await env.DB.prepare(
     'SELECT article_title FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1',
   ).bind(requestedTitle).first();
-  if (!article) throw new HttpError(404, 'Статья не найдена');
   const createdDate = validateArticleDate(body.createdDate);
+  const catalogArticle = await env.DB.prepare('SELECT article_title FROM articles WHERE article_title = ? COLLATE NOCASE LIMIT 1').bind(requestedTitle).first();
+  if (!article && !catalogArticle) throw new HttpError(404, 'Статья не найдена');
+  if (catalogArticle) {
+    await env.DB.prepare('UPDATE articles SET created_date = ? WHERE article_title = ? COLLATE NOCASE').bind(createdDate, catalogArticle.article_title).run();
+    return json({ ok: true, articleTitle: catalogArticle.article_title, createdDate });
+  }
+  if (!article) throw new HttpError(404, 'Статья не найдена');
   const articleTitle = article.article_title;
   const articleKey = articleTitle.normalize('NFC').toLowerCase();
   await env.DB.prepare(
@@ -318,6 +326,31 @@ async function setArticleDate(request, env) {
     'ON CONFLICT(article_key) DO UPDATE SET article_title = excluded.article_title, created_date = excluded.created_date, updated_at = excluded.updated_at',
   ).bind(articleKey, articleTitle, createdDate, Date.now()).run();
   return json({ ok: true, articleTitle, createdDate });
+}
+
+async function adminCreateArticle(request, env) {
+  const body = await readJson(request, 8 * 1024);
+  const title = clean(body.title, { min: 2, max: LIMITS.article, label: 'Название статьи' });
+  const authorId = typeof body.authorId === 'string' && ID_RE.test(body.authorId) ? body.authorId : '';
+  if (!authorId || !(await env.DB.prepare('SELECT id FROM authors WHERE id = ?').bind(authorId).first())) {
+    throw new HttpError(400, 'Выберите существующего автора');
+  }
+  const createdDate = validateArticleDate(body.createdDate);
+  if (typeof body.wikiUrl !== 'string' || body.wikiUrl.length > 2048) throw new HttpError(400, 'Укажите ссылку на статью в ЗМВ');
+  let wikiUrl;
+  try { wikiUrl = new URL(body.wikiUrl.trim()); } catch { throw new HttpError(400, 'Проверьте ссылку на статью в ЗМВ'); }
+  if (wikiUrl.protocol !== 'https:' || wikiUrl.hostname !== 'minecraft-backrooms.fandom.com' || wikiUrl.username || wikiUrl.password) {
+    throw new HttpError(400, 'Ссылка должна вести на HTTPS-страницу minecraft-backrooms.fandom.com');
+  }
+  const now = Date.now();
+  try {
+    await env.DB.prepare('INSERT INTO articles (article_key, article_title, author_id, created_date, wiki_url, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(title.normalize('NFC').toLowerCase(), title, authorId, createdDate, wikiUrl.toString(), now).run();
+  } catch (e) {
+    if (isUnique(e)) throw new HttpError(409, 'Статья с таким названием уже есть в каталоге');
+    throw e;
+  }
+  return json({ ok: true }, 201);
 }
 
 async function createReview(request, env, user, admin) {
@@ -359,7 +392,8 @@ async function createReview(request, env, user, admin) {
   if (!(await env.DB.prepare('SELECT id FROM authors WHERE id = ?').bind(authorId).first())) throw new HttpError(400, 'Автор не найден');
 
   // Если рецензии на эту статью уже есть, берём каноничное написание и автора.
-  const existing = await env.DB.prepare('SELECT article_title, author_id FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1').bind(articleTitle).first();
+  const catalogArticle = await env.DB.prepare('SELECT article_title, author_id FROM articles WHERE article_title = ? COLLATE NOCASE LIMIT 1').bind(articleTitle).first();
+  const existing = catalogArticle || await env.DB.prepare('SELECT article_title, author_id FROM reviews WHERE article_title = ? COLLATE NOCASE LIMIT 1').bind(articleTitle).first();
   if (existing) { articleTitle = existing.article_title; authorId = existing.author_id; }
 
   const review = {
@@ -666,6 +700,7 @@ export async function onRequest({ request, env }) {
       if (!(await isAdmin(request, env))) throw new HttpError(401, 'Требуется вход администратора');
 
       if (path === '/api/admin/articles/date' && method === 'POST') return await setArticleDate(request, env);
+      if (path === '/api/admin/articles' && method === 'POST') return await adminCreateArticle(request, env);
 
       if (path === '/api/admin/pending' && method === 'GET') {
         const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'pending' ORDER BY created_at ASC LIMIT 500`).all();

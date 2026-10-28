@@ -450,6 +450,10 @@ dialog .sub-tabs { margin-bottom: 14px; }
 .article-date-editor { width: min(100%, 320px); display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(0,0,0,.15); }
 .article-date-editor[hidden] { display: none !important; }
 .article-date-editor .field-label { margin: 0; }
+.article-catalog-tools { margin: 0 0 16px; }
+.article-create-form { width: min(100%, 420px); display: grid; gap: 8px; margin-top: 10px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(0,0,0,.15); }
+.article-create-form[hidden] { display: none !important; }
+.article-create-form .field-label { margin: 4px 0 0; }
 @media (max-width: 520px) {
   .article-card { gap: 10px; padding: 11px; }
   .article-card .score-ring { width: 54px; height: 54px; border-width: 3px; }
