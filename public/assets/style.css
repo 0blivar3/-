@@ -500,7 +500,8 @@ dialog .sub-tabs { margin-bottom: 14px; }
 
 /* Обновление 2.3 */
 .article-card { display: grid; grid-template-columns: minmax(0,1fr); align-items: start; gap: 14px; }
-.article-cover { width: min(100%, 180px); aspect-ratio: 1 / 1; justify-self: center; object-fit: contain; object-position: center; border-radius: 10px; background: #171d22; }
+.article-cover { width: min(100%, 360px); max-height: 240px; height: auto; justify-self: center; object-fit: contain; object-position: center; border-radius: 10px; background: #171d22; }
+.article-cover-empty { width: min(100%, 180px); aspect-ratio: 1 / 1; }
 .article-cover-empty { display: grid; place-items: center; color: #86c99b; font-size: 2rem; border: 1px dashed rgba(63,150,99,.3); }
 .article-score-inline { display: flex; margin: 2px 0 8px; }
 .article-admin-editor { grid-column: 1 / -1; margin-top: 10px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-inner); }
