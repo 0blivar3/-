@@ -507,7 +507,7 @@ dialog .sub-tabs { margin-bottom: 14px; }
 .article-admin-editor { grid-column: 1 / -1; margin-top: 10px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-inner); }
 .article-admin-editor select[multiple], #newArticleAuthor[multiple] { min-height: 100px; }
 .article-card-action { margin-top: 6px; }
-.article-cover-detail { max-width: 190px; aspect-ratio: 1; }
+.article-cover-detail { width: min(100%, 360px); max-width: 190px; max-height: 240px; height: auto; aspect-ratio: auto; }
 .article-coauthors { display: flex; gap: 8px; flex-wrap: wrap; }
 #tab-faq details { padding: 15px 2px; border-bottom: 1px solid var(--border-color); }
 #tab-faq details:last-child { border-bottom: 0; }
