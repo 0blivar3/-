@@ -258,7 +258,7 @@
   function articleAdminEditor(art) {
     const form = h('form', { class: 'article-admin-editor', hidden: true, onsubmit: async (event) => {
       event.preventDefault(); const submit = form.querySelector('button[type="submit"]'); submit.disabled = true;
-      try { await api(`/admin/articles/${encodeURIComponent(art.title.normalize('NFC').toLowerCase())}`, { method: 'PUT', body: { title: title.value, authorIds: [...authors.selectedOptions].map((o) => o.value), createdDate: date.value, wikiUrl: url.value, coverImage: imageUrl.value.trim() } }); toast('Статья обновлена', 'ok'); await loadData(); }
+      try { await api(`/admin/articles/${encodeURIComponent(art.articleKey || art.title.normalize('NFC').toLowerCase())}`, { method: 'PUT', body: { title: title.value, authorIds: [...authors.selectedOptions].map((o) => o.value), createdDate: date.value, wikiUrl: url.value, coverImage: imageUrl.value.trim() } }); toast('Статья обновлена', 'ok'); await loadData(); }
       catch (error) { toast(error.message, 'error'); } finally { submit.disabled = false; }
     }});
     const title = h('input', { class: 'input-field', value: art.title, required: true, minlength: 2, maxlength: 150, 'aria-label': 'Название статьи' });
