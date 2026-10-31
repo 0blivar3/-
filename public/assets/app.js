@@ -264,9 +264,9 @@
     const title = h('input', { class: 'input-field', value: art.title, required: true, minlength: 2, maxlength: 150, 'aria-label': 'Название статьи' });
     const authors = h('select', { class: 'input-field', multiple: true, size: 4, 'aria-label': 'Авторы статьи' }, authorOptions(art.authorIds || [art.authorId]));
     const date = h('input', { class: 'input-field', type: 'date', value: art.createdDate, required: true, 'aria-label': 'Дата создания' });
-    const url = h('input', { class: 'input-field', type: 'url', maxlength: 2048, value: art.wikiUrl || '', required: true, 'aria-label': 'Ссылка на статью ЗМВ' });
+    const url = h('input', { class: 'input-field', type: 'text', inputmode: 'url', maxlength: 4096, value: art.wikiUrl || '', required: true, spellcheck: false, 'aria-label': 'Ссылка на статью ЗМВ' });
     const imageUrl = h('input', { class: 'input-field', type: 'url', maxlength: 2048, value: art.coverImage || '', placeholder: 'https://…', 'aria-label': 'URL изображения статьи' });
-    form.append(h('label', { class: 'field-label' }, 'Название'), title, h('label', { class: 'field-label' }, 'Авторы'), authors, h('label', { class: 'field-label' }, 'Дата выхода'), date, h('label', { class: 'field-label' }, 'Ссылка ЗМВ'), url, h('label', { class: 'field-label' }, 'URL изображения (HTTPS; оставьте пустым, чтобы убрать обложку)'), imageUrl, h('button', { type: 'submit', class: 'btn btn-primary' }, 'Сохранить изменения'));
+    form.append(h('label', { class: 'field-label' }, 'Название'), title, h('label', { class: 'field-label' }, 'Авторы'), authors, h('label', { class: 'field-label' }, 'Дата выхода'), date, h('label', { class: 'field-label' }, 'Ссылка ЗМВ (можно вставить [ссылку](URL))'), url, h('label', { class: 'field-label' }, 'URL изображения (HTTPS; оставьте пустым, чтобы убрать обложку)'), imageUrl, h('button', { type: 'submit', class: 'btn btn-primary' }, 'Сохранить изменения'));
     return h('div', null, h('button', { type: 'button', class: 'btn btn-outline article-card-action', onclick: () => { form.hidden = !form.hidden; if (!form.hidden) title.focus(); } }, '✏️ Редактировать'), form);
   }
 
@@ -1367,7 +1367,10 @@
 
   function parseWikiUrl(value) {
     try {
-      const u = new URL(value);
+      const input = String(value || '').trim();
+      const markdownLink = input.match(/^\\[([^\\]]+)\\]\\((https:\\/\\/[^)\\s]+)\\)$/i);
+      const directUrl = markdownLink ? markdownLink[2] : input;
+      const u = new URL(directUrl);
       return u.protocol === 'https:' && u.hostname === WIKI_HOST && !u.username && !u.password ? u.toString() : null;
     } catch { return null; }
   }
