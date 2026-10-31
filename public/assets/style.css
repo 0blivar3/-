@@ -78,7 +78,7 @@ a { color: inherit; }
   cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease;
   display: inline-flex; align-items: center; gap: 6px;
 }
-.nav-btn.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); box-shadow: 0 0 12px rgba(59, 130, 246, 0.4); }
+.nav-btn.active { background: #3f9646; color: #fff; border-color: #3f9646; box-shadow: 0 0 12px rgba(63, 150, 70, 0.4); }
 .nav-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.05); color: #fff; }
 .pending-badge { background: var(--danger-red); color: #fff; border-radius: 10px; padding: 0 7px; font-size: 0.72rem; }
 
@@ -103,7 +103,7 @@ body.admin-mode .admin-only { display: inline-flex !important; }
 .notice-error { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.5); }
 
 /* Кнопки и поля */
-.btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; background: var(--accent-blue); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.82rem; transition: all 0.2s; }
+.btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; background: #43b04e; color: #fff; border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.82rem; transition: all 0.2s; }
 .btn:hover { opacity: 0.92; transform: translateY(-1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .btn-purple { background: var(--accent-purple); box-shadow: 0 0 10px rgba(168, 85, 247, 0.3); }
@@ -117,7 +117,7 @@ body.admin-mode .admin-only { display: inline-flex !important; }
   width: 100%; background: #0c0e15; border: 1px solid var(--border-color);
   color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 0.88rem; margin-bottom: 10px; transition: border 0.2s;
 }
-.input-field:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent-blue); }
+.input-field:focus, select:focus, textarea:focus { outline: none; border-color: var(--border-accent); }
 .input-auto { width: auto; }
 .no-mb { margin-bottom: 0 !important; }
 .field-label { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; }
