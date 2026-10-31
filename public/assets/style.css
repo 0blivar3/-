@@ -70,6 +70,14 @@ a { color: inherit; }
 }
 .header h1 { font-size: 1.35rem; color: #fff; font-weight: 800; }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.notification-menu { position: relative; }
+.notification-menu summary { cursor: pointer; list-style: none; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); background: var(--card-inner); }
+.notification-menu summary::-webkit-details-marker { display: none; }
+.notification-list { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(340px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 8px; background: #12151e; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 12px 30px #0009; }
+.notification-item { padding: 10px; border-bottom: 1px solid var(--border-color); overflow-wrap: anywhere; }
+.notification-item:last-child { border-bottom: 0; }
+.notification-item.unread { border-left: 3px solid var(--accent-blue); }
+.notification-item time, .review-liker time { display: block; color: var(--text-muted); font-size: .75rem; margin-top: 4px; }
 
 .nav-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .nav-btn {
@@ -388,6 +396,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
 /* рецензии */
 .review-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 2px; }
 .review-meta .review-article-title { margin-top: 0; }
+.review-likes { position: relative; display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.review-likers-toggle { border: 0; background: transparent; color: var(--accent-purple-light); cursor: pointer; padding: 6px 8px; font-size: .8rem; }
+.review-likers-popover { position: absolute; z-index: 12; top: calc(100% + 6px); left: 0; width: min(300px, calc(100vw - 48px)); max-height: 260px; overflow: auto; padding: 8px 12px; background: #12151e; border: 1px solid var(--border-color); border-radius: 9px; box-shadow: 0 10px 26px #0009; }
+.review-liker { padding: 7px 0; border-bottom: 1px solid var(--border-color); overflow-wrap: anywhere; }
+.review-liker:last-child { border-bottom: 0; }
 .review-text.clamped { max-height: 10.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 65%, transparent); mask-image: linear-gradient(#000 65%, transparent); }
 .result-group { margin-bottom: 22px; }
 a.ai-reviewer-tag { text-decoration: none; }

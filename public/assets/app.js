@@ -7,7 +7,7 @@
   const USERS_KEY = '__users';
   const WIKI_HOST = 'minecraft-backrooms.fandom.com';
   const WIKI_DEFAULT = 'https://minecraft-backrooms.fandom.com/ru/wiki/';
-  const DRAFT_KEY = 'wb_draft_v3';
+  const DRAFT_KEY = 'wb_draft_v4';
   const PAGE = 20;
 
   // Статичные доверенные SVG-иконки (не содержат пользовательских данных).
@@ -20,7 +20,7 @@
   };
 
   const state = {
-    authors: [], users: [], reviews: [], articleDates: [], articles: [], pending: [], myReviews: [],
+    authors: [], users: [], reviews: [], articleDates: [], articles: [], pending: [], myReviews: [], notifications: [], likesByReview: new Map(),
     me: null, myAuthorId: null, admin: false, loaded: false, config: {}, idx: null, prefillRating: null,
     feedLimit: PAGE, authorTab: 'articles', userTab: 'reviews', editingAuthor: null,
     authMode: 'login', turnstileToken: '', turnstileId: null, tsLoading: false, wikiLoaded: false,
@@ -108,8 +108,8 @@
     return d;
   }
 
-  const scoreRing = (value, cls = '') => h('div', { class: `score-ring ${tier(value)} ${cls}`, title: 'Балл из 90' },
-    h('span', { class: 'sr-num' }, String(Math.round(value))), h('span', { class: 'sr-max' }, '/90'));
+  const scoreRing = (value, cls = '') => h('div', { class: `score-ring ${tier(value)} ${cls}`, title: 'Балл из 100' },
+    h('span', { class: 'sr-num' }, String(Math.round(value))), h('span', { class: 'sr-max' }, '/100'));
 
   const statsRow = (items, cls = '') => h('div', { class: `stats-row ${cls}` }, items.map(([val, label]) =>
     h('div', { class: 'stat-box' }, h('div', { class: 'stat-box-val' }, String(val)), h('div', { class: 'stat-box-lbl' }, label))));
@@ -201,41 +201,26 @@
         statsRow([[rs.length, 'Рецензий'], [uniqueTitles(all), 'Статей'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. оценка']])));
   }
 
-  const SCORE_CRITERIA = [
-    'Текст / Понятность',
-    'Структура / Вики',
-    'Реализация концепта',
-    'Оригинальность',
-    'Атмосфера / Вайб',
-  ];
-
   function articleScoreBadge(art, ringClass = '') {
     const scoreList = scored(art.reviews);
     const ring = scoreList.length
       ? scoreRing(art.avg, ringClass)
       : h('div', { class: `score-ring score-ring-empty ${ringClass}`, title: 'Пока нет оценок' },
-          h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/90'));
-    const criteriaRows = SCORE_CRITERIA.map((name, i) => {
-      const values = scoreList
-        .map((r) => Array.isArray(r.criteria) ? r.criteria[i] : null)
-        .filter((value) => Number.isFinite(value));
-      const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-      return h('div', { class: 'score-tooltip-row' },
-        h('span', null, name),
-        h('strong', null, average === null ? '—' : `${average.toFixed(1)} / 10`));
-    });
+          h('span', { class: 'sr-num' }, '—'), h('span', { class: 'sr-max' }, '/100'));
+    const voteRows = scoreList.slice(0, 8).map((r) => h('div', { class: 'score-tooltip-row' },
+      h('span', null, r.reviewerName), h('strong', null, `${r.score} / 100`)));
     return h('div', {
       class: 'score-tooltip-wrap',
       tabindex: 0,
       role: 'group',
-      'aria-label': scoreList.length ? `Средний балл ${art.avg.toFixed(1)} из 90. Нажмите или наведите, чтобы увидеть оценки по критериям.` : 'У статьи пока нет оценок',
+      'aria-label': scoreList.length ? `Средняя оценка ${art.avg.toFixed(1)} из 100. Нажмите или наведите, чтобы увидеть голоса.` : 'У статьи пока нет оценок',
     }, ring,
       h('div', { class: 'score-tooltip', role: 'tooltip' },
-        h('strong', { class: 'score-tooltip-title' }, 'Средние оценки по критериям'),
+        h('strong', { class: 'score-tooltip-title' }, 'Оценки пользователей'),
         h('div', { class: 'score-tooltip-summary' }, scoreList.length
-          ? `${scoreList.length} ${plural(scoreList.length, ['оценка', 'оценки', 'оценок'])} · ${art.avg.toFixed(1)} / 90`
+          ? `${scoreList.length} ${plural(scoreList.length, ['оценка', 'оценки', 'оценок'])} · ${art.avg.toFixed(1)} / 100`
           : 'Оценок пока нет'),
-        ...criteriaRows));
+        ...voteRows));
   }
 
   function openRatingForArticle(art) {
@@ -349,19 +334,33 @@
     }
     if (state.admin) {
       if (moderation) actions.push(h('button', { type: 'button', class: 'btn btn-ok', onclick: () => moderate(r.id, 'approve') }, '✓ Одобрить'));
+      if (moderation) actions.push(h('button', { type: 'button', class: 'btn btn-danger btn-outline', onclick: () => moderate(r.id, 'reject') }, 'Отклонить'));
       actions.push(h('button', { type: 'button', class: 'btn btn-danger btn-outline', onclick: () => moderate(r.id, 'delete') }, '🗑 Удалить'));
     }
     const hasReview = r.hasReview !== false;
     const hasScore = r.hasScore !== false;
     const ownReview = state.me && lc(r.reviewerName) === lc(state.me.username);
     if (r.status === 'approved' && r.reviewerKind === 'user' && hasReview) {
-      actions.push(h('button', {
+      const likesButton = h('button', {
         type: 'button',
         class: `btn btn-outline review-like${r.likedByMe ? ' is-liked' : ''}`,
         disabled: !!r.likedByMe || !!ownReview,
         title: ownReview ? 'Нельзя поставить лайк своей рецензии' : r.likedByMe ? 'Вы уже поставили лайк' : 'Нравится рецензия',
         onclick: () => likeReview(r.id),
-      }, `👍 ${Number(r.likes || 0)}`));
+      }, `👍 ${Number(r.likes || 0)}`);
+      const listButton = h('button', { type: 'button', class: 'review-likers-toggle', 'aria-expanded': 'false', 'aria-label': 'Показать пользователей, которым нравится рецензия', onclick: async (event) => {
+        const panel = event.currentTarget.nextElementSibling;
+        const opening = panel.hidden;
+        panel.hidden = !opening;
+        event.currentTarget.setAttribute('aria-expanded', String(opening));
+        if (!opening) return;
+        try {
+          if (!state.likesByReview.has(r.id)) state.likesByReview.set(r.id, (await api(`/reviews/${encodeURIComponent(r.id)}/likes`)).likes);
+          const likes = state.likesByReview.get(r.id);
+          panel.replaceChildren(...(likes.length ? likes.map((like) => h('div', { class: 'review-liker' }, h('strong', null, like.username), h('time', { datetime: new Date(like.createdAt).toISOString() }, fmtDate(like.createdAt)))) : [h('div', { class: 'muted small' }, 'Пока никто не поставил лайк.') ]));
+        } catch (error) { panel.replaceChildren(h('div', { class: 'muted small' }, error.message)); }
+      } }, 'Кто лайкнул?');
+      actions.push(h('div', { class: 'review-likes' }, likesButton, listButton, h('div', { class: 'review-likers-popover', role: 'region', 'aria-label': 'Пользователи, поставившие лайк', hidden: true })));
     }
     const reviewText = hasReview ? r.text : 'Пользователь поставил оценку без текстовой рецензии.';
     const long = hasReview && r.text.length > 700;
@@ -378,17 +377,11 @@
             h('a', { class: 'review-article-title', href: articleHref(r.articleTitle) }, 'Статья: ', h('strong', null, r.articleTitle)),
             h('a', { class: 'review-article-title', href: authorHref(r.authorId) }, 'Автор: ' + author.name))),
         hasScore ? h('div', { class: 'score-breakdown-box' },
-          h('div', { class: 'score-total-display' }, String(r.score), h('span', { class: 'muted small' }, ' / 90')),
-          h('div', { class: 'score-criteria-display', 'aria-label': `Оценки по критериям: ${r.criteria.map((value, i) => `${SCORE_CRITERIA[i]} — ${value} из 10`).join('; ')}` },
-            ...r.criteria.map((value, i) => h('span', {
-              class: `criterion-score ${i === 4 ? 'criterion-score-atmosphere' : 'criterion-score-standard'}`,
-              title: `${SCORE_CRITERIA[i]}: ${value} из 10`,
-              'aria-label': `${SCORE_CRITERIA[i]}: ${value} из 10`,
-              tabindex: 0,
-            }, String(value)))))
+          h('div', { class: 'score-total-display' }, String(r.score), h('span', { class: 'muted small' }, ' / 100')),
+          ownReview ? h('div', { class: 'muted tiny' }, 'Ваша оценка') : null)
           : h('div', { class: 'review-no-score muted small' }, 'Без оценки')),
       h('div', { class: 'row-gap' }, reviewerTag(r),
-        showStatus ? h('span', { class: `chip ${r.status === 'approved' ? 'chip-ok' : 'chip-warn'}` }, r.status === 'approved' ? '✓ Опубликовано' : '⏳ На модерации') : null),
+        showStatus ? h('span', { class: `chip ${r.status === 'approved' ? 'chip-ok' : r.status === 'rejected' ? 'chip-warn' : 'chip-warn'}` }, r.status === 'approved' ? '✓ Опубликовано' : r.status === 'rejected' ? 'Отклонено' : '⏳ На модерации') : null),
       text, more,
       h('div', { class: 'review-date' }, fmtDate(r.createdAt)),
       actions.length ? h('div', { class: 'review-actions' }, actions) : null);
@@ -425,11 +418,11 @@
       hero.append(h('a', { class: 'hero-featured', href: articleHref(top.articleTitle) },
         h('div', { class: 'hero-badge' }, '🏆 Топ-1 статья портала'),
         h('div', { class: 'hero-title' }, top.articleTitle),
-        h('div', { class: 'hero-meta' }, 'Автор: ', h('strong', null, author.name), ' • Оценка: ', h('strong', { class: 'gold' }, `${top.score} / 90`)),
+        h('div', { class: 'hero-meta' }, 'Автор: ', h('strong', null, author.name), ' • Оценка: ', h('strong', { class: 'gold' }, `${top.score} / 100`)),
         h('div', { class: 'hero-quote' }, '«' + top.text.slice(0, 300) + '»')));
     }
     $('#statTotalReviews').textContent = String(reviewItems.length);
-    $('#statAvgScore').textContent = scoreItems.length ? `${avg(scoreItems).toFixed(1)} / 90` : '—';
+    $('#statAvgScore').textContent = scoreItems.length ? `${avg(scoreItems).toFixed(1)} / 100` : '—';
     $('#statArticles').textContent = String(state.idx.articles.length);
     $('#statUsers').textContent = String(state.users.length);
 
@@ -707,7 +700,7 @@
     $('#aiProfileContent').replaceChildren(
       h('div', { class: 'row-gap mb-12' }, icon, h('div', null,
         h('h2', { class: 'section-title' }, isUsers ? 'Пользователи' : key),
-        h('div', { class: 'muted small' }, 'Средняя оценка: ', h('strong', { class: 'purple-text' }, `${avg(list).toFixed(1)} / 90`), ` | ${cnt(list.length, F_REV)}`))),
+        h('div', { class: 'muted small' }, 'Средняя оценка: ', h('strong', { class: 'purple-text' }, `${avg(list).toFixed(1)} / 100`), ` | ${cnt(list.length, F_REV)}`))),
       ...(list.length ? list.map((r) => reviewCard(r)) : [emptyBox('Рецензий пока нет.')]));
   }
 
@@ -840,8 +833,26 @@
   function renderAuthBox() {
     const box = $('#authBox');
     if (state.me) {
+      const unread = state.notifications.filter((n) => !n.readAt).length;
+      const messages = state.notifications.map((n) => {
+        const message = n.type === 'review_liked'
+          ? `${n.actorName} поставил лайк рецензии «${n.reviewTitle}»`
+          : n.type === 'review_approved' ? `Рецензия «${n.reviewTitle}» принята`
+            : `Рецензия «${n.reviewTitle}» отклонена`;
+        return h('div', { class: `notification-item${n.readAt ? '' : ' unread'}` }, h('div', null, message), h('time', { datetime: new Date(n.createdAt).toISOString() }, fmtDate(n.createdAt)));
+      });
+      const notifications = h('details', { class: 'notification-menu', ontoggle: async (event) => {
+        if (!event.currentTarget.open || !unread) return;
+        try {
+          await api('/me/notifications/read', { method: 'POST', body: {} });
+          state.notifications = state.notifications.map((n) => ({ ...n, readAt: n.readAt || Date.now() }));
+          event.currentTarget.querySelector('summary').textContent = '🔔 Уведомления';
+          event.currentTarget.querySelectorAll('.notification-item').forEach((item) => item.classList.remove('unread'));
+        } catch { /* оставляем уведомления непрочитанными при ошибке */ }
+      } }, h('summary', null, `🔔 Уведомления${unread ? ` (${unread})` : ''}`), h('div', { class: 'notification-list', role: 'region', 'aria-label': 'Уведомления' }, ...(messages.length ? messages : [h('div', { class: 'muted small' }, 'Уведомлений пока нет.')])));
       box.replaceChildren(
         h('a', { class: 'user-chip', href: '#/profile', title: 'Мой профиль' }, avatar(state.me.username, state.me.avatar, 'avatar-xs'), h('span', null, state.me.username)),
+        notifications,
         h('button', { type: 'button', class: 'btn btn-outline', onclick: logoutUser }, 'Выйти'));
     } else {
       box.replaceChildren(
@@ -911,7 +922,10 @@
     }
     state.pending = []; state.myReviews = [];
     if (state.admin) { try { state.pending = (await api('/admin/pending')).reviews; } catch { /* нет прав */ } }
-    if (state.me) { try { state.myReviews = (await api('/me/reviews')).reviews; } catch { /* ignore */ } }
+    if (state.me) {
+      try { state.myReviews = (await api('/me/reviews')).reviews; } catch { /* ignore */ }
+      try { state.notifications = (await api('/me/notifications')).notifications; } catch { state.notifications = []; }
+    } else state.notifications = [];
     rerender();
   }
 
@@ -919,12 +933,12 @@
 
   async function moderate(id, action) {
     try {
-      if (action === 'approve') await api(`/admin/reviews/${encodeURIComponent(id)}/approve`, { method: 'POST', body: {} });
+      if (action === 'approve' || action === 'reject') await api(`/admin/reviews/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: {} });
       else {
         if (!confirm('Удалить эту рецензию?')) return;
         await api(`/admin/reviews/${encodeURIComponent(id)}`, { method: 'DELETE' });
       }
-      toast(action === 'approve' ? 'Рецензия опубликована' : 'Рецензия удалена', 'ok');
+      toast(action === 'approve' ? 'Рецензия опубликована' : action === 'reject' ? 'Рецензия отклонена' : 'Рецензия удалена', 'ok');
       await loadData();
     } catch (e) { toast(e.message, 'error'); }
   }
@@ -1195,8 +1209,6 @@
   }
 
   /* ---------- оценщик ---------- */
-  const critEls = () => ['c1', 'c2', 'c3', 'c4', 'cAtm'].map((id) => $('#' + id));
-  const criteria = () => critEls().map((el) => parseInt(el.value, 10));
   const textLen = () => [...$('#reviewText').value].length;
 
   function updateSubmissionMode() {
@@ -1204,6 +1216,7 @@
     const hasReview = mode !== 'rating';
     const hasScore = mode !== 'review';
     $('#scoreFields').hidden = !hasScore;
+    $('#ratingInput').required = hasScore;
     $('#reviewTitleField').hidden = !hasReview;
     $('#reviewTextField').hidden = !hasReview;
     $('#reviewTitle').required = hasReview;
@@ -1219,35 +1232,35 @@
   }
 
   function updateScore() {
-    const c = criteria();
-    ['val1', 'val2', 'val3', 'val4', 'valAtm'].forEach((id, i) => { $('#' + id).textContent = String(c[i]); });
-    const score = calcScore(c);
-    $('#finalScore').textContent = String(score);
-    $('#finalScore').classList.toggle('rzt-score-max', score === 90);
+    const score = Number($('#ratingInput').value);
+    $('#finalScore').textContent = Number.isInteger(score) && score >= 0 && score <= 100 ? String(score) : '—';
+    $('#finalScore').classList.toggle('rzt-score-max', score === 100);
   }
 
   function saveDraft() {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ articleTitle: $('#articleTitle').value, reviewTitle: $('#reviewTitle').value, text: $('#reviewText').value, criteria: criteria(), submissionType: $('#submissionType').value })); } catch { /* недоступно */ }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ articleTitle: $('#articleTitle').value, reviewTitle: $('#reviewTitle').value, text: $('#reviewText').value, rating: $('#ratingInput').value, submissionType: $('#submissionType').value })); } catch { /* недоступно */ }
   }
 
   function loadDraft() {
     try {
-      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || localStorage.getItem('wb_draft_v3') || 'null');
       if (!d || typeof d !== 'object') return;
       if (typeof d.submissionType === 'string' && ['both', 'rating', 'review'].includes(d.submissionType)) $('#submissionType').value = d.submissionType;
       if (typeof d.articleTitle === 'string') $('#articleTitle').value = d.articleTitle.slice(0, 150);
       if (typeof d.reviewTitle === 'string') $('#reviewTitle').value = d.reviewTitle.slice(0, 120);
       if (typeof d.text === 'string') $('#reviewText').value = d.text.slice(0, 10000);
-      if (Array.isArray(d.criteria) && d.criteria.length === 5) critEls().forEach((el, i) => { const n = Number(d.criteria[i]); if (Number.isInteger(n) && n >= 1 && n <= 10) el.value = String(n); });
+      let draftRating = Number(d.rating);
+      if (!Number.isInteger(draftRating) && Array.isArray(d.criteria) && d.criteria.length === 5) draftRating = Math.round(calcScore(d.criteria.map(Number)) * 100 / 90);
+      if (Number.isInteger(draftRating) && draftRating >= 0 && draftRating <= 100) $('#ratingInput').value = String(draftRating);
     } catch { /* повреждённый черновик */ }
     updateSubmissionMode();
   }
 
   function resetForm() {
-    critEls().forEach((el) => { el.value = '5'; });
+    $('#ratingInput').value = '50';
     $('#submissionType').value = 'both';
     ['articleTitle', 'reviewTitle', 'reviewText'].forEach((id) => { $('#' + id).value = ''; });
-    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(DRAFT_KEY); localStorage.removeItem('wb_draft_v3'); } catch { /* ignore */ }
     $('#textCounter').textContent = '0';
     updateSubmissionMode();
     updateScore();
@@ -1257,15 +1270,10 @@
     $('#reviewerKind').addEventListener('change', updateEvaluatorUi);
     $('#submissionType').addEventListener('change', () => { updateSubmissionMode(); saveDraft(); });
     $('#aiProfile').replaceChildren(...AI_NAMES.map((n) => h('option', { value: n }, n)));
-    critEls().forEach((el) => el.addEventListener('input', () => { updateScore(); saveDraft(); }));
+    $('#ratingInput').addEventListener('input', () => { updateScore(); saveDraft(); });
     ['articleTitle', 'reviewTitle'].forEach((id) => $('#' + id).addEventListener('input', saveDraft));
     $('#reviewText').addEventListener('input', () => { $('#textCounter').textContent = String(textLen()); saveDraft(); });
     $('#resetBtn').addEventListener('click', resetForm);
-    const criteriaDialog = $('#criteriaDialog');
-    $('#criteriaOpenBtn').addEventListener('click', () => criteriaDialog.showModal());
-    $('#criteriaCloseBtn').addEventListener('click', () => criteriaDialog.close());
-    criteriaDialog.addEventListener('click', (e) => { if (e.target === criteriaDialog) criteriaDialog.close(); });
-
     $('#reviewForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const aiMode = state.admin && $('#reviewerKind').value === 'ai';
@@ -1280,7 +1288,7 @@
         const hasScore = mode !== 'review';
         const res = await api('/reviews', { method: 'POST', body: {
           articleTitle: $('#articleTitle').value, reviewTitle: hasReview ? $('#reviewTitle').value : '', authorId: $('#authorSelect').value,
-          text: hasReview ? $('#reviewText').value : '', criteria: hasScore ? criteria() : undefined, hasReview, hasScore,
+          text: hasReview ? $('#reviewText').value : '', rating: hasScore ? Number($('#ratingInput').value) : undefined, hasReview, hasScore,
           reviewerKind: aiMode ? 'ai' : 'user', reviewerName: aiMode ? $('#aiProfile').value : undefined,
         } });
         const action = mode === 'rating' ? 'Оценка' : mode === 'review' ? 'Рецензия' : 'Оценка и рецензия';
@@ -1316,8 +1324,8 @@
     const R = num('v_r_concept') + num('v_r_impl');
     const C = num('v_c_format') + num('v_c_concept') + num('v_c_semantic');
     const D = num('v_depth');
-    const S = parseInt($('#v_score_90').value, 10);
-    const Q = S / 90;
+    const S = parseInt($('#v_score_100').value, 10);
+    const Q = S / 100;
     const mSum = Math.min(9, Math.max(1, Math.round(num('v_m_author') + num('v_m_expect'))));
     const M = ZM[mSum];
     const V = (R + C + D) * Q * M;
@@ -1325,7 +1333,7 @@
     $('#badgeR').textContent = `${R.toFixed(1)} б.`;
     $('#badgeC').textContent = `${C.toFixed(1)} б.`;
     $('#badgeD').textContent = `${D.toFixed(1)} б.`;
-    $('#v_score_90_lbl').textContent = `${S}/90`;
+    $('#v_score_100_lbl').textContent = `${S}/100`;
     $('#badgeQ').textContent = `${Q.toFixed(2)} (${Math.round(Q * 100)}%)`;
     $('#badgeM').textContent = `${M.toFixed(2)} (балл ${mSum})`;
     $('#calcValRes').textContent = V.toFixed(2);
@@ -1346,7 +1354,6 @@
   }
 
   async function init() {
-    $('#atmTable').replaceChildren(...Object.entries(ATM).map(([k, v]) => h('tr', null, h('td', null, k), h('td', null, v.toFixed(4)))));
     $$('.zmvi-in').forEach((el) => el.addEventListener('input', recalcZmvi));
     $('#feedSortSelect').addEventListener('change', () => { state.feedLimit = PAGE; renderHome(); });
     $('#feedMoreBtn').addEventListener('click', () => { state.feedLimit += PAGE; renderHome(); });
