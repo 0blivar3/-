@@ -118,8 +118,17 @@ CREATE TABLE IF NOT EXISTS articles (
   author_id     TEXT NOT NULL,
   created_date  TEXT NOT NULL,
   wiki_url      TEXT NOT NULL,
-  created_at    INTEGER NOT NULL
+  created_at    INTEGER NOT NULL,
+  cover_image   TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS article_authors (
+  article_key TEXT NOT NULL REFERENCES articles(article_key) ON DELETE CASCADE,
+  author_id TEXT NOT NULL REFERENCES authors(id) ON DELETE RESTRICT,
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (article_key, author_id)
+);
+CREATE INDEX IF NOT EXISTS idx_article_authors_author ON article_authors(author_id, article_key);
 
 INSERT OR IGNORE INTO authors (id, name, avatar, created_at)
 VALUES ('a1', 'Неизвестный Автор', '', 0);

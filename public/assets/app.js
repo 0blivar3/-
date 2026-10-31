@@ -132,12 +132,13 @@
     const push = (map, key, r) => { if (!map.has(key)) map.set(key, []); map.get(key).push(r); };
     state.authors.forEach((a) => idx.authors.set(a.id, a));
     state.users.forEach((u) => idx.users.set(lc(u.username), u));
-    const arts = new Map((state.articles || []).map((a) => [lc(a.title), { ...a, reviews: [] }]));
+    const arts = new Map((state.articles || []).map((a) => [lc(a.title), { ...a, authorIds: a.authorIds || [a.authorId], reviews: [] }]));
     for (const r of state.reviews) {
-      push(idx.byAuthor, r.authorId, r);
+      const articleAuthorIds = arts.get(lc(r.articleTitle))?.authorIds || [r.authorId];
+      for (const authorId of articleAuthorIds) push(idx.byAuthor, authorId, r);
       if (r.registered && r.reviewerKind === 'user') push(idx.byUser, lc(r.reviewerName), r);
       const key = lc(r.articleTitle);
-      if (!arts.has(key)) arts.set(key, { title: r.articleTitle, authorId: r.authorId, reviews: [] });
+      if (!arts.has(key)) arts.set(key, { title: r.articleTitle, authorId: r.authorId, authorIds: [r.authorId], reviews: [] });
       arts.get(key).reviews.push(r);
     }
     idx.articles = [...arts.values()].map((a) => {
@@ -231,13 +232,15 @@
 
   function articleCard(art) {
     const author = state.idx.authors.get(art.authorId);
+    const articleAuthors = (art.authorIds || [art.authorId]).map((id) => state.idx.authors.get(id)).filter(Boolean);
     const reviewCount = reviewed(art.reviews).length;
     const scoreCount = scored(art.reviews).length;
     return h('article', { class: 'article-card' },
-      articleScoreBadge(art),
+      art.coverImage ? h('img', { class: 'article-cover', src: art.coverImage, alt: `Иллюстрация: ${art.title}`, loading: 'lazy' }) : h('div', { class: 'article-cover article-cover-empty', 'aria-hidden': 'true' }, '📖'),
       h('div', { class: 'ac-main' },
+        articleScoreBadge(art, 'article-score-inline'),
         h('a', { class: 'ac-title ac-title-link', href: articleHref(art.title) }, art.title),
-        h('div', { class: 'ac-meta' }, 'Автор: ', author ? author.name : 'Неизвестный'),
+        h('div', { class: 'ac-meta' }, articleAuthors.length ? articleAuthors.map((a, i) => [i ? ', ' : '', h('a', { href: authorHref(a.id) }, a.name)]) : ['Автор: ', author ? author.name : 'Неизвестный']),
         h('div', { class: 'ac-chips' },
           h('span', { class: 'chip' }, cnt(reviewCount, F_REV)),
           h('span', { class: 'chip' }, cnt(scoreCount, ['оценка', 'оценки', 'оценок'])),
@@ -246,7 +249,30 @@
           art.latest ? h('span', { class: 'chip' }, `Активность: ${fmtDay(art.latest)}`) : null,
           art.wikiUrl ? h('a', { class: 'chip', href: art.wikiUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Статья в ЗМВ ↗') : null),
         h('div', { class: 'ac-actions' },
-          h('a', { class: 'btn btn-outline article-card-action', href: articleHref(art.title) }, 'Открыть страницу'))));
+          h('a', { class: 'btn btn-outline article-card-action', href: articleHref(art.title) }, 'Открыть страницу'), state.admin ? articleAdminEditor(art) : null)));
+  }
+
+  function imageData(file) {
+    if (!file) return Promise.resolve('');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 512000) return Promise.reject(new Error('Выберите PNG, JPEG или WebP размером до 500 КБ'));
+    return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('Не удалось прочитать изображение')); reader.readAsDataURL(file); });
+  }
+  function authorOptions(selected) {
+    return state.authors.map((a) => h('option', { value: a.id, selected: selected.includes(a.id) }, a.name));
+  }
+  function articleAdminEditor(art) {
+    const form = h('form', { class: 'article-admin-editor', hidden: true, onsubmit: async (event) => {
+      event.preventDefault(); const submit = form.querySelector('button[type="submit"]'); submit.disabled = true;
+      try { const image = await imageData(file.files[0]); await api(`/admin/articles/${encodeURIComponent(art.title.normalize('NFC').toLowerCase())}`, { method: 'PUT', body: { title: title.value, authorIds: [...authors.selectedOptions].map((o) => o.value), createdDate: date.value, wikiUrl: url.value, coverImage: image || art.coverImage || '' } }); toast('Статья обновлена', 'ok'); await loadData(); }
+      catch (error) { toast(error.message, 'error'); } finally { submit.disabled = false; }
+    }});
+    const title = h('input', { class: 'input-field', value: art.title, required: true, minlength: 2, maxlength: 150, 'aria-label': 'Название статьи' });
+    const authors = h('select', { class: 'input-field', multiple: true, size: 4, 'aria-label': 'Авторы статьи' }, authorOptions(art.authorIds || [art.authorId]));
+    const date = h('input', { class: 'input-field', type: 'date', value: art.createdDate, required: true, 'aria-label': 'Дата создания' });
+    const url = h('input', { class: 'input-field', type: 'url', maxlength: 2048, value: art.wikiUrl || '', required: true, 'aria-label': 'Ссылка на статью ЗМВ' });
+    const file = h('input', { class: 'input-field', type: 'file', accept: 'image/png,image/jpeg,image/webp', 'aria-label': 'Новое изображение статьи' });
+    form.append(h('label', { class: 'field-label' }, 'Название'), title, h('label', { class: 'field-label' }, 'Авторы'), authors, h('label', { class: 'field-label' }, 'Дата выхода'), date, h('label', { class: 'field-label' }, 'Ссылка ЗМВ'), url, h('label', { class: 'field-label' }, 'Изображение (до 500 КБ; пустой выбор сохраняет текущее)'), file, h('button', { type: 'submit', class: 'btn btn-primary' }, 'Сохранить изменения'));
+    return h('div', null, h('button', { type: 'button', class: 'btn btn-outline article-card-action', onclick: () => { form.hidden = !form.hidden; if (!form.hidden) title.focus(); } }, '✏️ Редактировать'), form);
   }
 
   function articleDateEditor(art) {
@@ -409,6 +435,7 @@
     const hero = $('#heroContainer');
     hero.replaceChildren();
     const rs = state.reviews;
+    hero.append(h('div', { class: 'home-intro' }, h('div', { class: 'home-intro-kicker' }, 'Фанатский портал · Закулисье Майнкрафта Вики'), h('h2', null, 'Открывай статьи. Сравнивай впечатления.'), h('p', null, 'Каталог материалов, оценки читателей и рецензии об одной из самых загадочных вселенных Minecraft.'), h('div', { class: 'row-gap' }, h('a', { class: 'btn btn-primary', href: '#/articles' }, 'Перейти к статьям'), h('a', { class: 'btn btn-outline', href: '#/faq' }, 'Как это работает'))));
     const reviewItems = reviewed(rs);
     const scoreItems = scored(rs);
     const featured = scoreItems.filter((r) => r.hasReview !== false);
@@ -476,12 +503,14 @@
     const reviewCount = reviewed(rs).length;
 
     const author = state.idx.authors.get(article.authorId) || { id: 'a1', name: 'Неизвестный автор' };
+    const articleAuthors = (article.authorIds || [article.authorId]).map((id) => state.idx.authors.get(id)).filter(Boolean);
     head.replaceChildren(h('div', { class: 'rzt-card' },
+      article.coverImage ? h('img', { class: 'article-cover article-cover-detail', src: article.coverImage, alt: `Иллюстрация: ${article.title}` }) : null,
       articleScoreBadge(article, 'ring-xl'),
       h('div', { class: 'rzt-details' },
         h('div', { class: 'rzt-tags' }, h('span', { class: 'rzt-tag' }, '📄 Статья вики'), h('span', { class: 'rzt-tag rzt-tag-accent' }, 'Закулисье')),
         h('h2', { class: 'rzt-title' }, article.title),
-        h('a', { class: 'row-gap author-inline', href: authorHref(author.id) }, avatar(author.name, author.avatar, 'avatar-xs'), 'Автор: ', h('strong', null, author.name)),
+        h('div', { class: 'article-coauthors' }, ...articleAuthors.map((a) => h('a', { class: 'row-gap author-inline', href: authorHref(a.id) }, avatar(a.name, a.avatar, 'avatar-xs'), h('strong', null, a.name)))),
         h('div', { class: 'article-created-date' }, 'Дата создания: ', h('strong', null, fmtArticleDate(article.createdDate))),
         article.wikiUrl ? h('div', { class: 'article-detail-actions' }, h('a', { class: 'btn btn-outline', href: article.wikiUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Открыть статью в ЗМВ ↗')) : null,
         articleDateEditor(article),
@@ -552,7 +581,7 @@
     lines.push(a.updatedAt ? `Карточка обновлена ${fmtDay(a.updatedAt)}` : '');
     const body = [profileHero({
       name: a.name, avatarUrl: a.avatar, badge: authorBadge(rs.length, avg(all)), lines: lines.filter(Boolean), bio: a.bio, actions,
-      stats: [[uniqueTitles(all), 'Статей'], [rs.length, 'Рецензий'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. балл'], [scored(all).length ? Math.max(...scored(all).map((r) => r.score)) : '—', 'Лучший балл']],
+      stats: [[state.idx.articles.filter((x) => (x.authorIds || [x.authorId]).includes(a.id)).length, 'Статей'], [rs.length, 'Рецензий'], [scored(all).length ? avg(all).toFixed(1) : '—', 'Ср. балл'], [scored(all).length ? Math.max(...scored(all).map((r) => r.score)) : '—', 'Лучший балл']],
     })];
     if (state.editingAuthor === a.id && canEditAuthor(a)) body.push(h('div', { class: 'panel' }, h('h3', { class: 'panel-title' }, '✏️ Редактирование карточки'), authorEditForm(a)));
 
@@ -562,8 +591,13 @@
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(r);
     });
+    const authorArticles = state.idx.articles.filter((x) => (x.authorIds || [x.authorId]).includes(a.id));
+    const globalMean = state.idx.articles.filter((x) => scored(x.reviews).length).reduce((sum, x, _, arr) => sum + x.avg / arr.length, 0);
+    const bayes = (x) => { const n = scored(x.reviews).length, m = 10; return (n * x.avg + m * globalMean) / (n + m); };
+    const sortSelect = h('select', { class: 'input-field author-article-sort', 'aria-label': 'Сортировать статьи', onchange: (event) => { state.authorArticleSort = event.target.value; route(); } }, [['newest','Сначала новые'],['oldest','Сначала старые'],['best','Лучшие статьи']].map(([v,l]) => h('option', { value: v, selected: (state.authorArticleSort || 'newest') === v }, l)));
+    const sortedAuthorArticles = [...authorArticles].sort((x,y) => state.authorArticleSort === 'oldest' ? (x.createdDate || '').localeCompare(y.createdDate || '') : state.authorArticleSort === 'best' ? bayes(y) - bayes(x) : (y.createdDate || '').localeCompare(x.createdDate || ''));
     const content = state.authorTab === 'articles'
-      ? (groups.size ? h('div', { class: 'article-grid' }, state.idx.articles.filter((x) => groups.has(lc(x.title))).sort((x, y) => y.avg - x.avg).map(articleCard)) : emptyBox('Статей пока нет.'))
+      ? (authorArticles.length ? h('div', null, h('p', { class: 'muted tiny' }, 'Рейтинг «Лучшие»: среднее с поправкой на число оценок; используется байесовская формула с 10 условными голосами за средний балл каталога.'), sortSelect, h('div', { class: 'article-grid' }, sortedAuthorArticles.map(articleCard))) : emptyBox('Статей пока нет.'))
       : h('div', null, all.length ? all.map((r) => reviewCard(r)) : emptyBox('Рецензий и оценок пока нет.'));
     body.push(h('div', { class: 'panel' },
       tabButtons([['articles', '📚 Статьи'], ['reviews', '💬 Рецензии и оценки']], state.authorTab, (k) => { state.authorTab = k; route(); }), content));
@@ -742,12 +776,12 @@
   }
 
   /* ---------- маршрутизация ---------- */
-  const TITLES = {
+  const TITLES = { faq: 'Частые вопросы',
     home: 'Закулисье Майнкрафта Вики — Экспертный портал рецензий', articles: 'Статьи', article: 'Статья', authors: 'Авторы', author: 'Автор',
     users: 'Пользователи', user: 'Профиль', critics: 'Критики', value: 'Калькулятор ценности статей ЗМВ', evaluator: 'Оценить статью',
     moderation: 'Модерация', profile: 'Мой профиль', search: 'Поиск', updates: 'История обновлений',
   };
-  const NAV_OF = { article: 'articles', author: 'authors', user: 'users' };
+  const NAV_OF = { faq: 'faq', article: 'articles', author: 'authors', user: 'users' };
 
   function applyPendingRating() {
     if (!state.prefillRating) return;
@@ -770,9 +804,8 @@
     if (!state.idx) return;
     const articleAuthorSelect = $('#newArticleAuthor');
     if (articleAuthorSelect) {
-      const currentAuthor = articleAuthorSelect.value;
-      articleAuthorSelect.replaceChildren(h('option', { value: '' }, 'Выберите автора'), ...state.authors.map((a) => h('option', { value: a.id }, a.name)));
-      if (state.authors.some((a) => a.id === currentAuthor)) articleAuthorSelect.value = currentAuthor;
+      const currentAuthors = new Set([...articleAuthorSelect.selectedOptions].map((o) => o.value));
+      articleAuthorSelect.replaceChildren(...state.authors.map((a) => h('option', { value: a.id, selected: currentAuthors.has(a.id) }, a.name)));
     }
     const raw = location.hash.replace(/^#\/?/, '');
     const [nameRaw, ...rest] = raw.split('/');
@@ -805,6 +838,7 @@
     if (name !== 'search') $('#globalSearch').value = '';
     document.title = name === 'home' ? TITLES.home : `${TITLES[name]} | Закулисье Майнкрафта Вики`;
 
+    if (name === 'faq') document.title = 'FAQ | Закулисье Майнкрафта Вики';
     if (name === 'home') renderHome();
     if (name === 'articles') renderArticlesList();
     if (name === 'article') {
@@ -1192,7 +1226,8 @@
       try {
         await api('/admin/articles', { method: 'POST', body: {
           title: $('#newArticleTitle').value,
-          authorId: $('#newArticleAuthor').value,
+          authorIds: [...$('#newArticleAuthor').selectedOptions].map((o) => o.value),
+          coverImage: await imageData($('#newArticleImage').files[0]),
           createdDate: $('#newArticleDate').value,
           wikiUrl: $('#newArticleUrl').value,
         } });
