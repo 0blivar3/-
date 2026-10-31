@@ -1368,7 +1368,7 @@
   function parseWikiUrl(value) {
     try {
       const input = String(value || '').trim();
-      const markdownLink = input.match(/^\\[([^\\]]+)\\]\\((https:\\/\\/[^)\\s]+)\\)$/i);
+      const markdownLink = input.match(/^\[([^\]]+)\]\((https:\/\/[^)\s]+)\)$/i);
       const directUrl = markdownLink ? markdownLink[2] : input;
       const u = new URL(directUrl);
       return u.protocol === 'https:' && u.hostname === WIKI_HOST && !u.username && !u.password ? u.toString() : null;
