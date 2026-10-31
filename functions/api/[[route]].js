@@ -377,9 +377,13 @@ async function setArticleDate(request, env) {
 }
 
 function validateWikiUrl(value) {
-  if (typeof value !== 'string' || value.length > 2048) throw new HttpError(400, 'Укажите ссылку на статью в ЗМВ');
+  if (typeof value !== 'string' || value.length > 4096) throw new HttpError(400, 'Ссылка на статью в ЗМВ слишком длинная');
+  let candidate = value.trim();
+  const markdownLink = candidate.match(/^\\[([^\\]]+)\\]\\((https:\\/\\/[^)\\s]+)\\)$/i);
+  if (markdownLink) candidate = markdownLink[2];
+  if (candidate.length > 2048) throw new HttpError(400, 'Ссылка на статью в ЗМВ слишком длинная');
   let url;
-  try { url = new URL(value.trim()); } catch { throw new HttpError(400, 'Проверьте ссылку на статью в ЗМВ'); }
+  try { url = new URL(candidate); } catch { throw new HttpError(400, 'Проверьте ссылку на статью в ЗМВ'); }
   if (url.protocol !== 'https:' || url.hostname !== 'minecraft-backrooms.fandom.com' || url.username || url.password) throw new HttpError(400, 'Ссылка должна вести на HTTPS-страницу minecraft-backrooms.fandom.com');
   return url.toString();
 }
