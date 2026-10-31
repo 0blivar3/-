@@ -379,7 +379,7 @@ async function setArticleDate(request, env) {
 function validateWikiUrl(value) {
   if (typeof value !== 'string' || value.length > 4096) throw new HttpError(400, 'Ссылка на статью в ЗМВ слишком длинная');
   let candidate = value.trim();
-  const markdownLink = candidate.match(/^\\[([^\\]]+)\\]\\((https:\\/\\/[^)\\s]+)\\)$/i);
+  const markdownLink = candidate.match(/^\[([^\]]+)\]\((https:\/\/[^)\s]+)\)$/i);
   if (markdownLink) candidate = markdownLink[2];
   if (candidate.length > 2048) throw new HttpError(400, 'Ссылка на статью в ЗМВ слишком длинная');
   let url;
