@@ -130,5 +130,14 @@ CREATE TABLE IF NOT EXISTS article_authors (
 );
 CREATE INDEX IF NOT EXISTS idx_article_authors_author ON article_authors(author_id, article_key);
 
+CREATE TABLE IF NOT EXISTS site_logs (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  message TEXT NOT NULL,
+  actor TEXT NOT NULL DEFAULT 'Система',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_site_logs_created ON site_logs(created_at DESC);
+
 INSERT OR IGNORE INTO authors (id, name, avatar, created_at)
 VALUES ('a1', 'Неизвестный Автор', '', 0);

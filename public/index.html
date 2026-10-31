@@ -19,11 +19,11 @@
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 100-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.2.8">
+  <link rel="stylesheet" href="/assets/style.css?v=2.3.1">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
-  <script src="/assets/app.js?v=2.2.8" defer></script>
+  <script src="/assets/app.js?v=2.3.1" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">К содержимому</a>
@@ -54,12 +54,18 @@
     <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
     <a class="nav-btn" href="#/faq" data-route="faq">❔ FAQ</a>
     <a class="nav-btn" href="#/updates" data-route="updates">🕘 История обновлений</a>
+    <a class="nav-btn admin-only" href="#/admin" data-route="admin">🛠 Админ-панель</a>
     <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
   </nav>
 
   <noscript><div class="panel">Для работы портала нужен включённый JavaScript.</div></noscript>
 
   <main id="main" tabindex="-1">
+
+    <section id="tab-admin" class="tab-content" aria-label="Административная панель"><div class="wrap wrap-1100">
+      <div id="adminDashboardError" class="notice notice-error" hidden></div>
+      <div id="adminDashboardContent"><div class="panel muted">Загрузка панели…</div></div>
+    </div></section>
 
     <!-- ГЛАВНАЯ -->
     <section id="tab-home" class="tab-content" aria-label="Главная">
@@ -374,8 +380,8 @@
               <select id="newArticleAuthor" class="input-field" required multiple size="4" aria-describedby="authorSelectHelp"></select><p id="authorSelectHelp" class="muted tiny">Можно выбрать несколько авторов.</p>
               <label class="field-label" for="newArticleDate">Дата создания</label>
               <input id="newArticleDate" class="input-field" type="date" required>
-              <label class="field-label" for="newArticleImage">Изображение статьи (PNG/JPEG/WebP, до 500 КБ)</label>
-              <input id="newArticleImage" class="input-field" type="file" accept="image/png,image/jpeg,image/webp">
+              <label class="field-label" for="newArticleImage">URL изображения статьи (HTTPS, необязательно)</label>
+              <input id="newArticleImage" class="input-field" type="url" maxlength="2048" placeholder="https://…">
               <label class="field-label" for="newArticleUrl">Ссылка на статью в ЗМВ</label>
               <input id="newArticleUrl" class="input-field" type="url" maxlength="2048" required placeholder="https://minecraft-backrooms.fandom.com/ru/wiki/…">
               <button type="submit" class="btn btn-primary">Добавить статью</button>

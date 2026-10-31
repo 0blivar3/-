@@ -499,10 +499,6 @@ dialog .sub-tabs { margin-bottom: 14px; }
 }
 
 /* Обновление 2.3 */
-.home-intro { position: relative; overflow: hidden; margin: 4px 0 22px; padding: clamp(22px, 5vw, 48px); border: 1px solid rgba(63,150,99,.42); border-radius: 18px; background: radial-gradient(ellipse at 85% 15%, rgba(63,150,99,.22), transparent 46%), linear-gradient(130deg, #121a19, #151a24 68%, #191629); box-shadow: 0 16px 38px rgba(0,0,0,.24); }
-.home-intro h2 { max-width: 760px; margin: 8px 0; color: #f3f6f4; font-size: clamp(1.55rem, 4vw, 2.65rem); line-height: 1.12; letter-spacing: -.035em; }
-.home-intro p { max-width: 640px; color: var(--text-muted); line-height: 1.65; }
-.home-intro-kicker { color: #86c99b; font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
 .article-card { display: grid; grid-template-columns: minmax(90px, 150px) minmax(0,1fr); align-items: stretch; gap: 14px; }
 .article-cover { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px; background: #171d22; }
 .article-cover-empty { display: grid; place-items: center; color: #86c99b; font-size: 2rem; border: 1px dashed rgba(63,150,99,.3); }
@@ -520,9 +516,25 @@ dialog .sub-tabs { margin-bottom: 14px; }
 #authorPage .profile-hero { padding: 14px 16px; gap: 12px; }
 #authorPage .ph-bio { margin: 8px 0; }
 #authorPage .ph-stats { gap: 8px; }
-@media (max-width: 600px) { .article-card { grid-template-columns: 82px minmax(0,1fr); gap: 10px; padding: 12px; } .article-card .score-ring { width: 54px; height: 54px; } .article-card .ac-chips { gap: 4px; } .home-intro { padding: 22px 18px; } .article-cover-detail { max-width: 130px; } }
+@media (max-width: 600px) { .article-card { grid-template-columns: 82px minmax(0,1fr); gap: 10px; padding: 12px; } .article-card .score-ring { width: 54px; height: 54px; } .article-card .ac-chips { gap: 4px; } .article-cover-detail { max-width: 130px; } }
 #authorPage .ph-banner { height: 88px; }
 #authorPage .ph-body { margin-top: -42px; gap: 12px; padding: 0 16px; }
 #authorPage .ph-bio { padding: 8px 16px 2px; }
 #authorPage .ph-stats { margin: 10px 16px 14px; max-width: 620px; }
 @media (max-width: 600px) { #authorPage .ph-banner { height: 66px; } #authorPage .ph-body { margin-top: -30px; } #authorPage .ph-name { font-size: 1.4rem; } }
+
+/* Административная панель */
+.admin-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; margin: 14px 0; }
+.admin-stat-card { display: flex; flex-direction: column; gap: 5px; min-height: 84px; padding: 13px; border: 1px solid var(--border-color); border-radius: 11px; background: var(--card-inner); color: inherit; text-decoration: none; transition: border-color .18s, transform .18s; }
+.admin-stat-card:hover { border-color: var(--accent-green, #3f9663); transform: translateY(-1px); }
+.admin-stat-card strong { color: #f5f7f6; font-size: 1.35rem; line-height: 1.2; }
+.admin-stat-card span { color: var(--text-muted); font-size: .76rem; }
+.admin-recent-stats, .admin-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 14px; color: var(--text-muted); font-size: .82rem; }
+.admin-log-list { list-style: none; margin: 0; padding: 0; }
+.admin-log-entry { padding: 12px 2px; border-bottom: 1px solid var(--border-color); }
+.admin-log-entry:last-child { border-bottom: 0; }
+.admin-log-entry-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+.admin-log-entry-top strong { font-size: .86rem; font-weight: 650; overflow-wrap: anywhere; }
+.admin-log-entry time { color: var(--text-muted); font-size: .72rem; white-space: nowrap; }
+.admin-log-entry .tiny { margin-top: 4px; }
+@media (max-width: 520px) { .admin-log-entry-top { flex-direction: column; gap: 4px; } .admin-stats-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
