@@ -129,7 +129,7 @@ async function getData(env, admin, userId) {
     reviews: reviews.results.map(rowToReview),
     users: users.results.map(rowToUser),
     articleDates: articleDates.results.map((row) => ({ articleTitle: row.article_title, createdDate: row.created_date })),
-    articles: articles.results.map((row) => ({ title: row.article_title, authorId: row.author_id, authorIds: authorIdsByKey.get(row.article_key) || [row.author_id], createdDate: row.created_date, wikiUrl: row.wiki_url, coverImage: row.cover_image || '' })),
+    articles: articles.results.map((row) => ({ articleKey: row.article_key, title: row.article_title, authorId: row.author_id, authorIds: authorIdsByKey.get(row.article_key) || [row.author_id], createdDate: row.created_date, wikiUrl: row.wiki_url, coverImage: row.cover_image || '' })),
   };
 }
 
@@ -427,7 +427,13 @@ async function adminCreateArticle(request, env) {
   return json({ ok: true }, 201);
 }
 async function adminUpdateArticle(request, env, key) {
-  const article = await env.DB.prepare('SELECT * FROM articles WHERE article_key = ?').bind(key).first();
+  let article = await env.DB.prepare('SELECT * FROM articles WHERE article_key = ?').bind(key).first();
+  if (!article) {
+    const normalizedKey = key.normalize('NFC').toLowerCase();
+    const titles = await env.DB.prepare('SELECT article_key, article_title FROM articles').all();
+    const match = titles.results.find((row) => row.article_title.normalize('NFC').toLowerCase() === normalizedKey);
+    if (match) article = await env.DB.prepare('SELECT * FROM articles WHERE article_key = ?').bind(match.article_key).first();
+  }
   if (!article) throw new HttpError(404, 'Статья не найдена');
   const body = await readJson(request, 16 * 1024);
   const title = clean(body.title, { min: 2, max: LIMITS.article, label: 'Название статьи' });
