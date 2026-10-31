@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Закулисье Майнкрафта Вики — Экспертный портал рецензий</title>
-  <meta name="description" content="Портал рецензий и оценок статей вики «Закулисье Майнкрафта»: 90-балльная система оценивания, рейтинг авторов, калькулятор ценности статей ЗМВ.">
+  <meta name="description" content="Портал рецензий и оценок статей вики «Закулисье Майнкрафта»: 100-балльная система оценивания, рейтинг авторов, калькулятор ценности статей ЗМВ.">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#0a0b10">
   <!-- ЗАМЕНИТЕ https://YOUR-DOMAIN.pages.dev на адрес вашего сайта (здесь, в robots.txt и sitemap.xml) -->
@@ -13,17 +13,17 @@
   <meta property="og:locale" content="ru_RU">
   <meta property="og:site_name" content="Закулисье Майнкрафта Вики">
   <meta property="og:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
-  <meta property="og:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
+  <meta property="og:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 100-балльной системе.">
   <meta property="og:url" content="https://rizazazakulisieminecraftwiki.pages.dev/">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
-  <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 90-балльной системе.">
+  <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 100-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.2.7">
+  <link rel="stylesheet" href="/assets/style.css?v=2.2.8">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
-  <script src="/assets/app.js?v=2.2.7" defer></script>
+  <script src="/assets/app.js?v=2.2.8" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">К содержимому</a>
@@ -84,7 +84,7 @@
               <h2 class="panel-title">📊 Статистика Вики</h2>
               <div class="feed-stats-grid">
                 <div class="stat-card"><div class="stat-card-val" id="statTotalReviews">0</div><div class="stat-card-lbl">Рецензий</div></div>
-                <div class="stat-card"><div class="stat-card-val" id="statAvgScore">0 / 90</div><div class="stat-card-lbl">Ср. балл</div></div>
+                <div class="stat-card"><div class="stat-card-val" id="statAvgScore">0 / 100</div><div class="stat-card-lbl">Ср. балл</div></div>
                 <div class="stat-card"><div class="stat-card-val" id="statArticles">0</div><div class="stat-card-lbl">Статей</div></div>
                 <div class="stat-card"><div class="stat-card-val" id="statUsers">0</div><div class="stat-card-lbl">Пользователей</div></div>
               </div>
@@ -161,12 +161,12 @@
             <div>
               <div class="calc-card">
                 <div class="calc-card-title"><span>4. Качество (Q): 10%–100%</span><span class="badge-val" id="badgeQ">0.80</span></div>
-                <label class="field-label" for="v_score_90">Результат оценки по 90-балльной системе (S):</label>
+                <label class="field-label" for="v_score_100">Результат оценки по 100-балльной системе (S):</label>
                 <div class="row-gap">
-                  <input type="range" id="v_score_90" class="zmvi-in" min="9" max="90" value="72">
-                  <output class="score-out" id="v_score_90_lbl" for="v_score_90">72/90</output>
+                  <input type="range" id="v_score_100" class="zmvi-in" min="0" max="100" value="80">
+                  <output class="score-out" id="v_score_100_lbl" for="v_score_100">80/100</output>
                 </div>
-                <p class="muted tiny mt-4">Формула нормализации: Q = S / 90.</p>
+                <p class="muted tiny mt-4">Формула нормализации: Q = S / 100.</p>
               </div>
 
               <div class="calc-card">
@@ -220,7 +220,7 @@
             <p>Система ценности статей ЗМВ предназначена для комплексной оценки творческой, концептуальной и литературной значимости материалов о Закулисье. Она учитывает оригинальность идеи, внутреннюю согласованность статьи, её глубину, качество исполнения и потенциальное влияние.</p>
             <h3>2. Формула расчёта</h3>
             <div class="formula-box">V = (R + C + D) × Q × M</div>
-            <p>Где <strong>R</strong> (Редкость), <strong>C</strong> (Целостность) и <strong>D</strong> (Глубина) формируют базовую оценку. <strong>Q</strong> (Качество) корректирует её по 90-балльной системе, а <strong>M</strong> (Влияние) учитывает известность автора и ожидания сообщества.</p>
+            <p>Где <strong>R</strong> (Редкость), <strong>C</strong> (Целостность) и <strong>D</strong> (Глубина) формируют базовую оценку. <strong>Q</strong> (Качество) корректирует её по 100-балльной системе, а <strong>M</strong> (Влияние) учитывает известность автора и ожидания сообщества.</p>
             <h3>3. Перевод суммарного балла влияния в множитель (M)</h3>
             <p>Сумма баллов за известность автора и ожидание публикации (1–9) преобразуется в множитель:</p>
             <table class="table-custom table-narrow">
@@ -257,32 +257,9 @@
             </select>
           </div>
           <div id="scoreFields">
-          <div class="rzt-grid-4">
-            <div class="rzt-slider-item">
-              <div class="rzt-slider-header"><label for="c1">Текст / Понятность</label><output class="rzt-slider-val" id="val1" for="c1">5</output></div>
-              <input type="range" id="c1" class="crit" min="1" max="10" value="5">
-            </div>
-            <div class="rzt-slider-item">
-              <div class="rzt-slider-header"><label for="c2">Структура / Вики</label><output class="rzt-slider-val" id="val2" for="c2">5</output></div>
-              <input type="range" id="c2" class="crit" min="1" max="10" value="5">
-            </div>
-            <div class="rzt-slider-item">
-              <div class="rzt-slider-header"><label for="c3">Реализация концепта</label><output class="rzt-slider-val" id="val3" for="c3">5</output></div>
-              <input type="range" id="c3" class="crit" min="1" max="10" value="5">
-            </div>
-            <div class="rzt-slider-item">
-              <div class="rzt-slider-header"><label for="c4">Оригинальность</label><output class="rzt-slider-val" id="val4" for="c4">5</output></div>
-              <input type="range" id="c4" class="crit" min="1" max="10" value="5">
-            </div>
-          </div>
-
-          <div class="rzt-atm-box">
-            <div class="rzt-slider-header mb-6">
-              <label for="cAtm" class="purple-text">Атмосфера / Вайб</label>
-              <output class="rzt-slider-val purple-text big" id="valAtm" for="cAtm">5</output>
-            </div>
-            <input type="range" id="cAtm" class="crit" min="1" max="10" value="5">
-          </div>
+            <label class="field-label" for="ratingInput">Ваша оценка (0–100):</label>
+            <input type="number" id="ratingInput" class="input-field" min="0" max="100" step="1" value="50" inputmode="numeric" required aria-describedby="ratingHelp">
+            <div id="ratingHelp" class="muted tiny">Введите целое число от 0 до 100.</div>
           </div>
 
           <div class="meta-inputs-row">
@@ -324,12 +301,11 @@
           <div class="rzt-bottom-bar">
             <div class="rzt-actions-left">
               <button type="button" class="rzt-btn-action" id="resetBtn">🗄 Очистить черновик</button>
-              <button type="button" class="rzt-btn-action" id="criteriaOpenBtn">ⓘ Критерии 90-балльной системы</button>
             </div>
             <div class="rzt-submit-box">
               <div class="text-right" id="scorePreview" aria-live="polite">
-                <span class="rzt-score-big" id="finalScore">45</span>
-                <span class="rzt-score-small" id="maxScoreLabel">/ 90</span>
+                <span class="rzt-score-big" id="finalScore">50</span>
+                <span class="rzt-score-small" id="maxScoreLabel">/ 100</span>
               </div>
               <button type="submit" class="rzt-publish-btn" id="submitBtn" title="Отправить" aria-label="Отправить оценку или рецензию">✓</button>
             </div>
@@ -591,6 +567,15 @@
         </div>
 
         <div class="updates-day">
+          <h3 class="updates-date"><time datetime="2026-11-01">1 ноября 2026</time></h3>
+          <article class="panel update-entry">
+            <div class="update-entry-head"><h4>Единая система оценок и уведомления</h4><span class="update-tag">Обновление 2.2</span></div>
+            <p>Оценки выставляются одним числом от 0 до 100. Старые оценки пересчитываются, а критерии и исходный итог остаются в базе. Добавлены уведомления о решении модерации и лайках рецензий, а список пользователей с лайками открывается рядом с кнопкой.</p>
+            <span class="update-source">Подготовлено · 01.11.2026</span>
+          </article>
+        </div>
+
+        <div class="updates-day">
           <h3 class="updates-date"><time datetime="2026-10-28">28 октября 2026</time></h3>
           <article class="panel update-entry">
             <div class="update-entry-head"><h4>Лайки и понятные оценки критериев</h4><span class="update-tag">Отзывы</span></div>
@@ -652,22 +637,6 @@
   <footer class="footer muted small">Неофициальный фанатский портал. Рецензии проходят модерацию. · <a href="#" id="adminLoginLink">Вход для администратора</a></footer>
 
   <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
-
-  <dialog id="criteriaDialog" aria-labelledby="criteriaTitle">
-    <div class="criteria-dialog-head">
-      <h2 id="criteriaTitle" class="panel-title">ℹ️ Критерии 90-балльной системы</h2>
-      <button type="button" class="btn btn-outline" id="criteriaCloseBtn" aria-label="Закрыть окно">✕</button>
-    </div>
-    <div class="doc-text">
-      <p>Четыре базовых критерия оцениваются от 1 до 10: «Текст / Понятность», «Структура / Вики», «Реализация концепта» и «Оригинальность». Их сумма умножается на 1.4, затем на коэффициент критерия «Атмосфера / Вайб» (1–10). Результат округляется и ограничивается 90 баллами.</p>
-      <div class="formula-box">Балл = round((К1 + К2 + К3 + К4) × 1.4 × коэффициент атмосферы), максимум 90</div>
-      <table class="table-custom table-narrow">
-        <thead><tr><th>Атмосфера</th><th>Коэффициент</th></tr></thead>
-        <tbody id="atmTable"></tbody>
-      </table>
-      <p>Балл всегда пересчитывается сервером по вашим оценкам, поэтому подделать его невозможно.</p>
-    </div>
-  </dialog>
 
   <dialog id="loginDialog" aria-labelledby="loginTitle">
     <form id="loginForm" method="dialog">

@@ -70,6 +70,33 @@ CREATE TABLE IF NOT EXISTS review_likes (
 
 CREATE INDEX IF NOT EXISTS idx_review_likes_user ON review_likes (user_id);
 
+CREATE TABLE IF NOT EXISTS review_ratings (
+  review_id TEXT PRIMARY KEY REFERENCES reviews(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 0 AND 100)
+);
+
+CREATE TABLE IF NOT EXISTS review_decisions (
+  review_id TEXT PRIMARY KEY REFERENCES reviews(id) ON DELETE CASCADE,
+  decision TEXT NOT NULL CHECK (decision IN ('rejected')),
+  decided_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('review_approved', 'review_rejected', 'review_liked')),
+  review_id TEXT NOT NULL,
+  review_title TEXT NOT NULL,
+  actor_user_id TEXT,
+  actor_name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  read_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_like_once ON notifications (user_id, type, review_id, actor_user_id) WHERE type = 'review_liked';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_review_once ON notifications (user_id, type, review_id) WHERE type IN ('review_approved', 'review_rejected');
+
 CREATE TABLE IF NOT EXISTS rate_limit (
   kind    TEXT NOT NULL,
   ip_hash TEXT NOT NULL,

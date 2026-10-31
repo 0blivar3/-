@@ -28,7 +28,8 @@ function rowToReview(r) {
     hasScore: r.has_score == null ? true : !!r.has_score,
     text: r.has_review === 0 ? '' : r.body,
     criteria: r.has_score === 0 ? null : [r.c1, r.c2, r.c3, r.c4, r.c_atm],
-    score: r.has_score === 0 ? null : r.score,
+    rating: r.has_score === 0 ? null : (r.rating ?? Math.min(100, Math.round(Number(r.score) * 100 / 90))),
+    score: r.has_score === 0 ? null : (r.rating ?? Math.min(100, Math.round(Number(r.score) * 100 / 90))),
     status: r.status,
     createdAt: r.created_at,
     likes: Number(r.likes || 0),
@@ -56,7 +57,7 @@ const rowToUser = (u) => ({
   socialLinks: parseJson(u.social_links, {}), favoriteAuthorIds: parseJson(u.favorite_author_ids, []), favoriteArticles: parseJson(u.favorite_articles, []),
 });
 
-const SELECT_REVIEWS = 'SELECT *, (reviewer_user_id IS NOT NULL) AS registered FROM reviews';
+const SELECT_REVIEWS = "SELECT reviews.*, (reviews.reviewer_user_id IS NOT NULL) AS registered, review_ratings.rating, CASE WHEN review_decisions.decision = 'rejected' THEN 'rejected' ELSE reviews.status END AS status FROM reviews LEFT JOIN review_ratings ON review_ratings.review_id = reviews.id LEFT JOIN review_decisions ON review_decisions.review_id = reviews.id";
 
 const INSERT_REVIEW =
   'INSERT OR IGNORE INTO reviews (id, article_title, review_title, author_id, reviewer_kind, reviewer_name, reviewer_user_id, body, c1, c2, c3, c4, c_atm, score, has_review, has_score, status, created_at) ' +
@@ -84,9 +85,9 @@ async function getData(env, admin, userId) {
       'LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC, a.name ASC',
     ).all(),
     env.DB.prepare(
-      'SELECT reviews.*, (reviews.reviewer_user_id IS NOT NULL) AS registered, COUNT(review_likes.user_id) AS likes, ' +
+      'SELECT reviews.*, review_ratings.rating, (reviews.reviewer_user_id IS NOT NULL) AS registered, COUNT(review_likes.user_id) AS likes, ' +
       'MAX(CASE WHEN review_likes.user_id = ? THEN 1 ELSE 0 END) AS liked_by_me ' +
-      'FROM reviews LEFT JOIN review_likes ON review_likes.review_id = reviews.id ' +
+      'FROM reviews LEFT JOIN review_ratings ON review_ratings.review_id = reviews.id LEFT JOIN review_likes ON review_likes.review_id = reviews.id ' +
       "WHERE reviews.status = 'approved' GROUP BY reviews.id ORDER BY reviews.created_at DESC LIMIT 3000",
     ).bind(userId || '').all(),
     env.DB.prepare(usersSql).all(),
@@ -105,12 +106,18 @@ async function getData(env, admin, userId) {
 async function likeReview(env, user, reviewId) {
   await rateLimit(env, 'review-like', user.id, 30, 3600);
   const review = await env.DB.prepare(
-    "SELECT reviewer_user_id FROM reviews WHERE id = ? AND status = 'approved' AND reviewer_kind = 'user' AND has_review = 1",
+    "SELECT reviewer_user_id, review_title FROM reviews WHERE id = ? AND status = 'approved' AND reviewer_kind = 'user' AND has_review = 1",
   ).bind(reviewId).first();
   if (!review) throw new HttpError(404, 'Рецензия не найдена');
   if (review.reviewer_user_id === user.id) throw new HttpError(403, 'Нельзя поставить лайк своей рецензии');
-  await env.DB.prepare('INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (?, ?, ?)')
-    .bind(reviewId, user.id, Date.now()).run();
+  const likedAt = Date.now();
+  const inserted = await env.DB.prepare('INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (?, ?, ?)')
+    .bind(reviewId, user.id, likedAt).run();
+  if (inserted.meta.changes && review.reviewer_user_id) {
+    const liker = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(user.id).first();
+    await env.DB.prepare('INSERT OR IGNORE INTO notifications (id, user_id, type, review_id, review_title, actor_user_id, actor_name, created_at) VALUES (?, ?, \'review_liked\', ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), review.reviewer_user_id, reviewId, review.review_title || 'Рецензия', user.id, liker?.username || 'Пользователь', likedAt).run();
+  }
   const result = await env.DB.prepare('SELECT COUNT(*) AS likes FROM review_likes WHERE review_id = ?').bind(reviewId).first();
   return json({ ok: true, likes: Number(result?.likes || 0), likedByMe: true });
 }
@@ -378,14 +385,16 @@ async function createReview(request, env, user, admin) {
     await rateLimit(env, 'review', user.id, 5, 3600);
     // Оценки без текстовой рецензии публикуются сразу и не занимают очередь модерации.
     if (hasReview || !hasScore) {
-      const pending = await env.DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").first();
+      const pending = await env.DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending' AND id NOT IN (SELECT review_id FROM review_decisions WHERE decision = 'rejected')").first();
       if (pending && pending.n >= 300) throw new HttpError(503, 'Очередь модерации переполнена, попробуйте позже');
     }
   }
   let articleTitle = clean(body.articleTitle, { min: 2, max: LIMITS.article, label: 'Название статьи' });
   const reviewTitle = hasReview ? clean(body.reviewTitle, { min: 2, max: LIMITS.title, label: 'Заголовок рецензии' }) : '';
   const text = hasReview ? clean(body.text, { min: LIMITS.minBody, max: LIMITS.body, multiline: true, label: 'Текст рецензии' }) : '';
-  const criteria = hasScore ? parseCriteria(body.criteria) : [5, 5, 5, 5, 5];
+  const rating = hasScore ? body.rating : null;
+  if (hasScore && (!Number.isInteger(rating) || rating < 0 || rating > 100)) throw new HttpError(400, 'Оценка должна быть целым числом от 0 до 100');
+  const criteria = [5, 5, 5, 5, 5];
 
   if (typeof body.authorId !== 'string' || !ID_RE.test(body.authorId)) throw new HttpError(400, 'Выберите автора статьи');
   let authorId = body.authorId;
@@ -400,7 +409,10 @@ async function createReview(request, env, user, admin) {
     id: crypto.randomUUID(), articleTitle, reviewTitle, authorId, reviewerKind, reviewerName, reviewerUserId, text, criteria, hasReview, hasScore,
     status: admin || (!hasReview && hasScore) ? 'approved' : 'pending', createdAt: Date.now(),
   };
-  await bindReview(env, review).run();
+  const legacyReview = bindReview(env, review);
+  const inserts = [legacyReview];
+  if (hasScore) inserts.push(env.DB.prepare('INSERT OR IGNORE INTO review_ratings (review_id, rating) VALUES (?, ?)').bind(review.id, rating));
+  await env.DB.batch(inserts);
   return json({ ok: true, status: review.status, id: review.id }, 201);
 }
 
@@ -523,7 +535,7 @@ async function exportAll(env) {
   ]);
   // Аккаунты и пароли в экспорт не попадают.
   return json({
-    version: 4,
+    version: 5,
     exportedAt: new Date().toISOString(),
     authors: authors.results.map(rowToAuthor),
     reviews: reviews.results.map(rowToReview),
@@ -580,7 +592,7 @@ async function importAll(request, env) {
       if (kind === 'ai' && !AI_NAMES.includes(reviewerName)) throw new Error('bad ai');
       const rawId = r.id == null ? '' : String(r.id);
       const mapped = idMap.get(r.authorId) || (knownIds.has(r.authorId) ? r.authorId : 'a1');
-      statements.push(bindReview(env, {
+      const imported = {
         id: ID_RE.test(rawId) ? rawId : crypto.randomUUID(),
         articleTitle: clean(r.articleTitle, { min: 1, max: LIMITS.article }),
         reviewTitle: r.hasReview === false ? '' : clean(r.reviewTitle, { min: 1, max: LIMITS.title }),
@@ -588,9 +600,17 @@ async function importAll(request, env) {
         text: r.hasReview === false ? '' : clean(r.text || '', { min: 1, max: LIMITS.body, multiline: true }),
         criteria: r.hasScore === false ? [5, 5, 5, 5, 5] : parseCriteria(r.criteria),
         hasReview: r.hasReview !== false, hasScore: r.hasScore !== false,
-        status: r.status === 'pending' ? 'pending' : 'approved',
+        status: (r.status === 'pending' || r.status === 'rejected') ? 'pending' : 'approved',
         createdAt: Number.isFinite(r.createdAt) ? Math.trunc(r.createdAt) : now - i,
-      }));
+      };
+      statements.push(bindReview(env, imported));
+      if (imported.hasScore) {
+        const migratedRating = Number.isInteger(r.rating) && r.rating >= 0 && r.rating <= 100
+          ? r.rating
+          : Math.min(100, Math.round((Number.isFinite(r.score) ? r.score : calcScore(imported.criteria)) * 100 / 90));
+        statements.push(env.DB.prepare('INSERT OR IGNORE INTO review_ratings (review_id, rating) VALUES (?, ?)').bind(imported.id, migratedRating));
+      }
+      if (r.status === 'rejected') statements.push(env.DB.prepare("INSERT OR IGNORE INTO review_decisions (review_id, decision, decided_at) VALUES (?, 'rejected', ?)").bind(imported.id, imported.createdAt));
       reviewsPrepared++;
     } catch { skipped++; }
   });
@@ -666,6 +686,16 @@ export async function onRequest({ request, env }) {
       const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE reviewer_user_id = ? ORDER BY created_at DESC LIMIT 200`).bind(u.id).all();
       return json({ reviews: res.results.map(rowToReview) });
     }
+    if (path === '/api/me/notifications' && method === 'GET') {
+      const u = await needUser();
+      const res = await env.DB.prepare('SELECT id, type, review_id AS reviewId, review_title AS reviewTitle, actor_name AS actorName, created_at AS createdAt, read_at AS readAt FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').bind(u.id).all();
+      return json({ notifications: res.results });
+    }
+    if (path === '/api/me/notifications/read' && method === 'POST') {
+      const u = await needUser();
+      await env.DB.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').bind(Date.now(), u.id).run();
+      return json({ ok: true });
+    }
 
     if (path === '/api/reviews' && method === 'POST') {
       const [user, admin] = await Promise.all([getSessionUser(request, env), isAdmin(request, env)]);
@@ -673,6 +703,13 @@ export async function onRequest({ request, env }) {
     }
     const likeMatch = path.match(/^\/api\/reviews\/([A-Za-z0-9_-]{1,64})\/like$/);
     if (likeMatch && method === 'POST') return await likeReview(env, await needUser(), likeMatch[1]);
+    const likesMatch = path.match(/^\/api\/reviews\/([A-Za-z0-9_-]{1,64})\/likes$/);
+    if (likesMatch && method === 'GET') {
+      const review = await env.DB.prepare("SELECT id FROM reviews WHERE id = ? AND status = 'approved' AND reviewer_kind = 'user' AND has_review = 1").bind(likesMatch[1]).first();
+      if (!review) throw new HttpError(404, 'Рецензия не найдена');
+      const likes = await env.DB.prepare('SELECT users.username, review_likes.created_at AS createdAt FROM review_likes JOIN users ON users.id = review_likes.user_id WHERE review_likes.review_id = ? ORDER BY review_likes.created_at DESC LIMIT 500').bind(likesMatch[1]).all();
+      return json({ likes: likes.results });
+    }
 
     if (path === '/api/authors' && method === 'POST') return await createOwnAuthor(request, env, await needUser());
     let m = path.match(/^\/api\/authors\/([A-Za-z0-9_-]{1,64})$/);
@@ -703,7 +740,7 @@ export async function onRequest({ request, env }) {
       if (path === '/api/admin/articles' && method === 'POST') return await adminCreateArticle(request, env);
 
       if (path === '/api/admin/pending' && method === 'GET') {
-        const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE status = 'pending' ORDER BY created_at ASC LIMIT 500`).all();
+        const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE reviews.status = 'pending' AND review_decisions.review_id IS NULL ORDER BY reviews.created_at ASC LIMIT 500`).all();
         return json({ reviews: res.results.map(rowToReview) });
       }
       if (path === '/api/admin/authors' && method === 'POST') return await adminCreateAuthor(request, env);
@@ -714,14 +751,28 @@ export async function onRequest({ request, env }) {
       if (m && !m[2] && method === 'DELETE') return await deleteAuthor(env, m[1]);
       if (m && m[2] && method === 'POST') return await setAuthorOwner(request, env, m[1]);
 
-      m = path.match(/^\/api\/admin\/reviews\/([A-Za-z0-9_-]{1,64})(\/approve)?$/);
-      if (m && m[2] && method === 'POST') {
-        const res = await env.DB.prepare("UPDATE reviews SET status = 'approved' WHERE id = ?").bind(m[1]).run();
-        if (!res.meta.changes) throw new HttpError(404, 'Рецензия не найдена');
+      m = path.match(/^\/api\/admin\/reviews\/([A-Za-z0-9_-]{1,64})\/(approve|reject)$/);
+      if (m && method === 'POST') {
+        const [review, now] = [await env.DB.prepare('SELECT reviewer_user_id, review_title, status FROM reviews WHERE id = ?').bind(m[1]).first(), Date.now()];
+        if (!review) throw new HttpError(404, 'Рецензия не найдена');
+        if (review.status !== 'pending') throw new HttpError(409, 'Рецензия уже обработана');
+        if (m[2] === 'approve') {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE reviews SET status = 'approved' WHERE id = ?").bind(m[1]),
+            env.DB.prepare('DELETE FROM review_decisions WHERE review_id = ?').bind(m[1]),
+            ...(review.reviewer_user_id ? [env.DB.prepare("INSERT OR IGNORE INTO notifications (id, user_id, type, review_id, review_title, created_at) VALUES (?, ?, 'review_approved', ?, ?, ?)").bind(crypto.randomUUID(), review.reviewer_user_id, m[1], review.review_title, now)] : []),
+          ]);
+        } else {
+          await env.DB.batch([
+            env.DB.prepare("INSERT OR REPLACE INTO review_decisions (review_id, decision, decided_at) VALUES (?, 'rejected', ?)").bind(m[1], now),
+            ...(review.reviewer_user_id ? [env.DB.prepare("INSERT OR IGNORE INTO notifications (id, user_id, type, review_id, review_title, created_at) VALUES (?, ?, 'review_rejected', ?, ?, ?)").bind(crypto.randomUUID(), review.reviewer_user_id, m[1], review.review_title, now)] : []),
+          ]);
+        }
         return json({ ok: true });
       }
-      if (m && !m[2] && method === 'DELETE') {
-        const res = await env.DB.prepare('DELETE FROM reviews WHERE id = ?').bind(m[1]).run();
+      const deleteReviewMatch = path.match(/^\/api\/admin\/reviews\/([A-Za-z0-9_-]{1,64})$/);
+      if (deleteReviewMatch && method === 'DELETE') {
+        const res = await env.DB.prepare('DELETE FROM reviews WHERE id = ?').bind(deleteReviewMatch[1]).run();
         if (!res.meta.changes) throw new HttpError(404, 'Рецензия не найдена');
         return json({ ok: true });
       }
