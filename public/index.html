@@ -19,7 +19,7 @@
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 100-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.3.7">
+  <link rel="stylesheet" href="/assets/style.css?v=2.3.8">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
@@ -582,15 +582,30 @@
         <div class="panel updates-intro">
           <p class="eyebrow">Журнал изменений</p>
           <h2 class="section-title">🕘 История обновлений сайта</h2>
-          <p class="muted">Здесь собраны функции и исправления, уже вошедшие в основную версию сайта. Даты указаны по дате слияния изменений.</p>
+          <p class="muted">Хронология уже выпущенных функций и исправлений. Записи собраны по дате выхода; в каждой можно открыть PR и посмотреть детали.</p>
         </div>
 
         <div class="updates-day">
           <h3 class="updates-date"><time datetime="2026-11-01">1 ноября 2026</time></h3>
-          <article class="panel update-entry">
-            <div class="update-entry-head"><h4>Единая система оценок и уведомления</h4><span class="update-tag">Обновление 2.2</span></div>
-            <p>Оценки выставляются одним числом от 0 до 100. Старые оценки пересчитываются, а критерии и исходный итог остаются в базе. Добавлены уведомления о решении модерации и лайках рецензий, а список пользователей с лайками открывается рядом с кнопкой.</p>
-            <span class="update-source">Подготовлено · 01.11.2026</span>
+          <article class="panel update-entry update-entry-featured">
+            <div class="update-entry-head"><h4>Обновление 2.2: оценки, уведомления и новые возможности</h4><span class="update-tag">Обновление 2.2</span></div>
+            <p>Обновление объединило новую систему оценок и уведомлений с изменениями интерфейса, справкой и инструментами для авторов.</p>
+            <ul class="update-highlights">
+              <li><strong>Единая шкала оценок</strong><span>Итог задаётся целым числом от 0 до 100.</span></li>
+              <li><strong>Пересчёт прежних оценок</strong><span>Итоги 0–90 пересчитываются по формуле <code>ROUND(старый итог × 100 / 90)</code>; исходные критерии и значения сохраняются.</span></li>
+              <li><strong>Уведомления о модерации</strong><span>Автор узнаёт, принята или отклонена его рецензия.</span></li>
+              <li><strong>Лайки рецензий</strong><span>Уведомления показывают, кто, когда и какую рецензию лайкнул; возле лайка можно открыть список пользователей.</span></li>
+              <li><strong>Зелёное выделение</strong><span>Синий цвет выделения заменён на зелёный, чтобы поддержать визуальный стиль сайта.</span></li>
+              <li><strong>FAQ</strong><span>Добавлена отдельная вкладка с ответами о проекте, оценках, рецензиях и использовании сайта.</span></li>
+              <li><strong>Картинки к статьям</strong><span>У статей появились обложки; администратор добавляет или меняет их через URL.</span></li>
+              <li><strong>Компактные профили</strong><span>Страницы авторов стали компактнее, сохранив важную информацию.</span></li>
+              <li><strong>Сортировка статей авторов</strong><span>Можно выбрать «Сначала новые», «Сначала старые» или «Лучшие статьи». Лучшие ранжируются по сглаженному среднему: 10 условных голосов учитывают среднее по каталогу.</span></li>
+            </ul>
+            <div class="update-entry-foot">
+              <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/15" target="_blank" rel="noopener noreferrer">Оценки и уведомления · PR #15</a>
+              <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/16" target="_blank" rel="noopener noreferrer">Интерфейс, FAQ и профили · PR #16</a>
+              <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/17" target="_blank" rel="noopener noreferrer">Обложки по URL · PR #17</a>
+            </div>
           </article>
         </div>
 
@@ -638,7 +653,7 @@
             <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/4" target="_blank" rel="noopener noreferrer">PR #4 · 28.10.2026</a>
           </article>
           <article class="panel update-entry">
-            <div class="update-entry-head"><h4>Прямые ссылки на рецензии и загрузка аватаров</h4><span class="update-tag">Обновление 2.2</span></div>
+            <div class="update-entry-head"><h4>Прямые ссылки на рецензии и загрузка аватаров</h4><span class="update-tag">Обновление 2.2 · часть 1</span></div>
             <p>Опубликованной рецензией можно поделиться по прямой ссылке: она открывает нужную статью и выделяет отзыв. В профиле можно загрузить аватар, который автоматически уменьшается для хранения.</p>
             <a class="update-source" href="https://github.com/0blivar3/RizaZaZakulisieMinecraftWiki/pull/2" target="_blank" rel="noopener noreferrer">PR #2 · 28.10.2026</a>
           </article>

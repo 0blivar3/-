@@ -487,6 +487,14 @@ dialog .sub-tabs { margin-bottom: 14px; }
 .updates-date::before { content: ""; position: absolute; top: .35em; left: -30px; width: 12px; height: 12px; border: 3px solid #0a0b10; border-radius: 50%; background: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,.55); }
 .update-entry { margin: 0 0 12px; padding: 18px 20px; }
 .update-entry-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.update-entry-featured { border-color: rgba(96,165,250,.32); background: linear-gradient(145deg, rgba(96,165,250,.07), transparent 55%), var(--card-inner); }
+.update-entry-featured .update-entry-head h4 { font-size: 1.08rem; }
+.update-highlights { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin: 14px 0; padding: 0; list-style: none; }
+.update-highlights li { padding: 12px; border: 1px solid rgba(96,165,250,.16); border-radius: 10px; background: rgba(7,12,20,.32); }
+.update-highlights strong { display: block; margin-bottom: 4px; color: var(--text-main); }
+.update-highlights span { color: var(--text-muted); line-height: 1.55; font-size: .9rem; }
+.update-entry-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; margin-top: 12px; }
+.update-entry-note { color: var(--text-muted); font-size: .8rem; }
 .update-entry h4 { margin: 0; color: var(--text-main); font-size: 1rem; }
 .update-entry p { margin: 10px 0; color: var(--text-muted); line-height: 1.65; }
 .update-tag { display: inline-flex; padding: 4px 9px; border: 1px solid rgba(96,165,250,.24); border-radius: 999px; background: rgba(96,165,250,.08); color: #93c5fd; font-size: .72rem; font-weight: 700; }
@@ -496,6 +504,8 @@ dialog .sub-tabs { margin-bottom: 14px; }
   .updates-day { margin-left: 4px; padding-left: 16px; }
   .updates-date::before { left: -24px; }
   .update-entry { padding: 15px; }
+  .update-highlights { grid-template-columns: 1fr; }
+  .update-entry-foot { align-items: flex-start; flex-direction: column; }
 }
 
 /* Обновление 2.3 */
