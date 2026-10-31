@@ -19,11 +19,11 @@
   <meta name="twitter:title" content="Закулисье Майнкрафта Вики — Экспертный портал рецензий">
   <meta name="twitter:description" content="Рецензии и оценки статей вики «Закулисье Майнкрафта» по 100-балльной системе.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/style.css?v=2.3.1">
+  <link rel="stylesheet" href="/assets/style.css?v=2.3.2">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Закулисье Майнкрафта Вики — Экспертный портал","inLanguage":"ru","description":"Портал рецензий и оценок статей вики «Закулисье Майнкрафта»."}
   </script>
-  <script src="/assets/app.js?v=2.3.1" defer></script>
+  <script src="/assets/app.js?v=2.3.2" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">К содержимому</a>
@@ -324,7 +324,7 @@
             <span>📖 Чтение статьи перед оценкой</span>
             <form class="row-gap wiki-form" id="wikiForm">
               <label class="sr-only" for="wikiUrl">Адрес статьи</label>
-              <input type="url" id="wikiUrl" class="input-field no-mb" value="https://minecraft-backrooms.fandom.com/ru/wiki/" placeholder="URL статьи вики…">
+              <input type="text" inputmode="url" id="wikiUrl" class="input-field no-mb" value="https://minecraft-backrooms.fandom.com/ru/wiki/" placeholder="URL или [ссылка](URL) из ЗМВ…" spellcheck="false">
               <button type="submit" class="btn">Загрузить</button>
               <a class="btn btn-outline" id="wikiOpenLink" href="https://minecraft-backrooms.fandom.com/ru/wiki/" target="_blank" rel="noopener noreferrer">Открыть в новой вкладке ↗</a>
             </form>
@@ -382,8 +382,8 @@
               <input id="newArticleDate" class="input-field" type="date" required>
               <label class="field-label" for="newArticleImage">URL изображения статьи (HTTPS, необязательно)</label>
               <input id="newArticleImage" class="input-field" type="url" maxlength="2048" placeholder="https://…">
-              <label class="field-label" for="newArticleUrl">Ссылка на статью в ЗМВ</label>
-              <input id="newArticleUrl" class="input-field" type="url" maxlength="2048" required placeholder="https://minecraft-backrooms.fandom.com/ru/wiki/…">
+              <label class="field-label" for="newArticleUrl">Ссылка на статью в ЗМВ (можно вставить [ссылку](URL))</label>
+              <input id="newArticleUrl" class="input-field" type="text" inputmode="url" maxlength="4096" required spellcheck="false" placeholder="URL или скопированная ссылка ЗМВ…">
               <button type="submit" class="btn btn-primary">Добавить статью</button>
             </form>
           </div>
