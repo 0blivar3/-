@@ -236,7 +236,7 @@
     const reviewCount = reviewed(art.reviews).length;
     const scoreCount = scored(art.reviews).length;
     return h('article', { class: 'article-card' },
-      art.coverImage ? h('img', { class: 'article-cover', src: art.coverImage, alt: `Иллюстрация: ${art.title}`, loading: 'lazy' }) : h('div', { class: 'article-cover article-cover-empty', 'aria-hidden': 'true' }, '📖'),
+      art.coverImage ? h('img', { class: 'article-cover', src: art.coverImage, alt: `Иллюстрация: ${art.title}`, loading: 'lazy', referrerpolicy: 'no-referrer' }) : h('div', { class: 'article-cover article-cover-empty', 'aria-hidden': 'true' }, '📖'),
       h('div', { class: 'ac-main' },
         articleScoreBadge(art, 'article-score-inline'),
         h('a', { class: 'ac-title ac-title-link', href: articleHref(art.title) }, art.title),
@@ -252,26 +252,21 @@
           h('a', { class: 'btn btn-outline article-card-action', href: articleHref(art.title) }, 'Открыть страницу'), state.admin ? articleAdminEditor(art) : null)));
   }
 
-  function imageData(file) {
-    if (!file) return Promise.resolve('');
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 512000) return Promise.reject(new Error('Выберите PNG, JPEG или WebP размером до 500 КБ'));
-    return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('Не удалось прочитать изображение')); reader.readAsDataURL(file); });
-  }
   function authorOptions(selected) {
     return state.authors.map((a) => h('option', { value: a.id, selected: selected.includes(a.id) }, a.name));
   }
   function articleAdminEditor(art) {
     const form = h('form', { class: 'article-admin-editor', hidden: true, onsubmit: async (event) => {
       event.preventDefault(); const submit = form.querySelector('button[type="submit"]'); submit.disabled = true;
-      try { const image = await imageData(file.files[0]); await api(`/admin/articles/${encodeURIComponent(art.title.normalize('NFC').toLowerCase())}`, { method: 'PUT', body: { title: title.value, authorIds: [...authors.selectedOptions].map((o) => o.value), createdDate: date.value, wikiUrl: url.value, coverImage: image || art.coverImage || '' } }); toast('Статья обновлена', 'ok'); await loadData(); }
+      try { await api(`/admin/articles/${encodeURIComponent(art.title.normalize('NFC').toLowerCase())}`, { method: 'PUT', body: { title: title.value, authorIds: [...authors.selectedOptions].map((o) => o.value), createdDate: date.value, wikiUrl: url.value, coverImage: imageUrl.value.trim() } }); toast('Статья обновлена', 'ok'); await loadData(); }
       catch (error) { toast(error.message, 'error'); } finally { submit.disabled = false; }
     }});
     const title = h('input', { class: 'input-field', value: art.title, required: true, minlength: 2, maxlength: 150, 'aria-label': 'Название статьи' });
     const authors = h('select', { class: 'input-field', multiple: true, size: 4, 'aria-label': 'Авторы статьи' }, authorOptions(art.authorIds || [art.authorId]));
     const date = h('input', { class: 'input-field', type: 'date', value: art.createdDate, required: true, 'aria-label': 'Дата создания' });
     const url = h('input', { class: 'input-field', type: 'url', maxlength: 2048, value: art.wikiUrl || '', required: true, 'aria-label': 'Ссылка на статью ЗМВ' });
-    const file = h('input', { class: 'input-field', type: 'file', accept: 'image/png,image/jpeg,image/webp', 'aria-label': 'Новое изображение статьи' });
-    form.append(h('label', { class: 'field-label' }, 'Название'), title, h('label', { class: 'field-label' }, 'Авторы'), authors, h('label', { class: 'field-label' }, 'Дата выхода'), date, h('label', { class: 'field-label' }, 'Ссылка ЗМВ'), url, h('label', { class: 'field-label' }, 'Изображение (до 500 КБ; пустой выбор сохраняет текущее)'), file, h('button', { type: 'submit', class: 'btn btn-primary' }, 'Сохранить изменения'));
+    const imageUrl = h('input', { class: 'input-field', type: 'url', maxlength: 2048, value: art.coverImage || '', placeholder: 'https://…', 'aria-label': 'URL изображения статьи' });
+    form.append(h('label', { class: 'field-label' }, 'Название'), title, h('label', { class: 'field-label' }, 'Авторы'), authors, h('label', { class: 'field-label' }, 'Дата выхода'), date, h('label', { class: 'field-label' }, 'Ссылка ЗМВ'), url, h('label', { class: 'field-label' }, 'URL изображения (HTTPS; оставьте пустым, чтобы убрать обложку)'), imageUrl, h('button', { type: 'submit', class: 'btn btn-primary' }, 'Сохранить изменения'));
     return h('div', null, h('button', { type: 'button', class: 'btn btn-outline article-card-action', onclick: () => { form.hidden = !form.hidden; if (!form.hidden) title.focus(); } }, '✏️ Редактировать'), form);
   }
 
@@ -435,7 +430,6 @@
     const hero = $('#heroContainer');
     hero.replaceChildren();
     const rs = state.reviews;
-    hero.append(h('div', { class: 'home-intro' }, h('div', { class: 'home-intro-kicker' }, 'Фанатский портал · Закулисье Майнкрафта Вики'), h('h2', null, 'Открывай статьи. Сравнивай впечатления.'), h('p', null, 'Каталог материалов, оценки читателей и рецензии об одной из самых загадочных вселенных Minecraft.'), h('div', { class: 'row-gap' }, h('a', { class: 'btn btn-primary', href: '#/articles' }, 'Перейти к статьям'), h('a', { class: 'btn btn-outline', href: '#/faq' }, 'Как это работает'))));
     const reviewItems = reviewed(rs);
     const scoreItems = scored(rs);
     const featured = scoreItems.filter((r) => r.hasReview !== false);
@@ -505,7 +499,7 @@
     const author = state.idx.authors.get(article.authorId) || { id: 'a1', name: 'Неизвестный автор' };
     const articleAuthors = (article.authorIds || [article.authorId]).map((id) => state.idx.authors.get(id)).filter(Boolean);
     head.replaceChildren(h('div', { class: 'rzt-card' },
-      article.coverImage ? h('img', { class: 'article-cover article-cover-detail', src: article.coverImage, alt: `Иллюстрация: ${article.title}` }) : null,
+      article.coverImage ? h('img', { class: 'article-cover article-cover-detail', src: article.coverImage, alt: `Иллюстрация: ${article.title}`, referrerpolicy: 'no-referrer' }) : null,
       articleScoreBadge(article, 'ring-xl'),
       h('div', { class: 'rzt-details' },
         h('div', { class: 'rzt-tags' }, h('span', { class: 'rzt-tag' }, '📄 Статья вики'), h('span', { class: 'rzt-tag rzt-tag-accent' }, 'Закулисье')),
@@ -775,8 +769,40 @@
     $('#myReviewsList').replaceChildren(...(state.myReviews.length ? state.myReviews.map((r) => reviewCard(r, { showStatus: true })) : [emptyBox('Вы ещё не писали рецензий.')]));
   }
 
+  async function renderAdminDashboard() {
+    if (!state.admin) return;
+    const target = $('#adminDashboardContent');
+    const errorBox = $('#adminDashboardError');
+    target.replaceChildren(h('div', { class: 'panel muted' }, 'Загрузка панели…'));
+    errorBox.hidden = true;
+    try {
+      const data = await api('/admin/dashboard');
+      const stats = data.stats;
+      const tiles = [
+        [stats.articles, 'Статей', '#/articles'], [stats.authors, 'Авторов', '#/authors'],
+        [stats.users, 'Пользователей', '#/users'], [stats.publishedReviews, 'Опубликованных рецензий', '#/moderation'],
+        [stats.pendingReviews, 'На модерации', '#/moderation'], [stats.ratings, 'Оценок', '#/articles'],
+        [stats.averageRating == null ? '—' : `${Number(stats.averageRating).toFixed(1)} / 100`, 'Средний балл', '#/articles'],
+        [stats.likes, 'Лайков рецензий', '#/home'],
+      ];
+      const grid = h('div', { class: 'admin-stats-grid' }, tiles.map(([value, label, href]) => h('a', { class: 'admin-stat-card', href }, h('strong', null, value), h('span', null, label))));
+      const activity = data.logs.length ? h('ol', { class: 'admin-log-list' }, data.logs.map((item) => h('li', { class: 'admin-log-entry' },
+        h('div', { class: 'admin-log-entry-top' }, h('strong', null, item.message), h('time', { datetime: new Date(item.createdAt).toISOString() }, fmtDate(item.createdAt))),
+        h('div', { class: 'muted tiny' }, `${item.category} · ${item.actor}`)))) : emptyBox('Записей пока нет. Новые действия появятся здесь.');
+      const recent = h('div', { class: 'admin-recent-stats' },
+        h('span', null, `За 7 дней: ${stats.newReviewsWeek} новых рецензий и оценок`),
+        h('span', null, `${stats.newUsersWeek} новых аккаунтов`));
+      target.replaceChildren(
+        h('div', { class: 'panel' }, h('h2', { class: 'panel-title' }, h('span', null, '🛠 Административная панель'), h('button', { class: 'btn btn-outline', type: 'button', onclick: renderAdminDashboard }, 'Обновить')), h('p', { class: 'muted small' }, 'Сводка сайта и журнал недавних действий.'), grid, recent,
+          h('div', { class: 'admin-shortcuts' }, h('a', { class: 'btn btn-purple', href: '#/moderation' }, `Очередь модерации (${stats.pendingReviews})`), h('a', { class: 'btn btn-outline', href: '#/articles' }, 'Каталог статей'), h('button', { class: 'btn btn-outline', type: 'button', onclick: () => $('#exportBtn').click() }, 'Экспорт данных'))),
+        h('div', { class: 'panel' }, h('h2', { class: 'panel-title' }, '📋 Журнал сайта'), activity));
+    } catch (error) {
+      target.replaceChildren(); errorBox.hidden = false; errorBox.textContent = `Не удалось загрузить админ-панель: ${error.message}`;
+    }
+  }
+
   /* ---------- маршрутизация ---------- */
-  const TITLES = { faq: 'Частые вопросы',
+  const TITLES = { admin: 'Админ-панель', faq: 'Частые вопросы',
     home: 'Закулисье Майнкрафта Вики — Экспертный портал рецензий', articles: 'Статьи', article: 'Статья', authors: 'Авторы', author: 'Автор',
     users: 'Пользователи', user: 'Профиль', critics: 'Критики', value: 'Калькулятор ценности статей ЗМВ', evaluator: 'Оценить статью',
     moderation: 'Модерация', profile: 'Мой профиль', search: 'Поиск', updates: 'История обновлений',
@@ -826,7 +852,7 @@
     if (name === 'authors' && param) name = 'author';
     if (name === 'users' && param) name = 'user';
     if (name === 'article' && !param) name = 'articles';
-    if (name === 'moderation' && !state.admin) name = 'home';
+    if ((name === 'moderation' || name === 'admin') && !state.admin) name = 'home';
 
     $$('.tab-content').forEach((s) => s.classList.toggle('active', s.id === `tab-${name}`));
     const navName = NAV_OF[name] || name;
@@ -839,6 +865,8 @@
     document.title = name === 'home' ? TITLES.home : `${TITLES[name]} | Закулисье Майнкрафта Вики`;
 
     if (name === 'faq') document.title = 'FAQ | Закулисье Майнкрафта Вики';
+    if (name === 'admin') document.title = 'Админ-панель | Закулисье Майнкрафта Вики';
+    if (name === 'admin') renderAdminDashboard();
     if (name === 'home') renderHome();
     if (name === 'articles') renderArticlesList();
     if (name === 'article') {
@@ -1227,7 +1255,7 @@
         await api('/admin/articles', { method: 'POST', body: {
           title: $('#newArticleTitle').value,
           authorIds: [...$('#newArticleAuthor').selectedOptions].map((o) => o.value),
-          coverImage: await imageData($('#newArticleImage').files[0]),
+          coverImage: $('#newArticleImage').value.trim(),
           createdDate: $('#newArticleDate').value,
           wikiUrl: $('#newArticleUrl').value,
         } });

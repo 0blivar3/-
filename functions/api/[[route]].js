@@ -73,6 +73,33 @@ function bindReview(env, r) {
 
 const isUnique = (e) => /UNIQUE|constraint/i.test(String((e && e.message) || e));
 
+async function recordSiteLog(env, category, message, actor = 'Система') {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO site_logs (id, category, message, actor, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), clean(category, { min: 1, max: 32, label: 'Категория журнала' }), clean(message, { min: 1, max: 240, label: 'Событие журнала' }), clean(actor || 'Система', { min: 1, max: 60, label: 'Автор события' }), now),
+    env.DB.prepare('DELETE FROM site_logs WHERE id NOT IN (SELECT id FROM site_logs ORDER BY created_at DESC LIMIT 5000)'),
+  ]);
+}
+
+async function adminDashboard(env) {
+  const week = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const [catalog, reviews, ratings, engagement, users, logs] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(*) AS articles FROM articles').first(),
+    env.DB.prepare("SELECT SUM(CASE WHEN status = 'approved' AND has_review = 1 THEN 1 ELSE 0 END) AS published, SUM(CASE WHEN status = 'pending' AND review_decisions.review_id IS NULL THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS recent FROM reviews LEFT JOIN review_decisions ON review_decisions.review_id = reviews.id").bind(week).first(),
+    env.DB.prepare('SELECT COUNT(*) AS total, AVG(rating) AS average FROM review_ratings').first(),
+    env.DB.prepare('SELECT COUNT(*) AS likes FROM review_likes').first(),
+    env.DB.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS recent FROM users WHERE banned = 0').bind(week).first(),
+    env.DB.prepare('SELECT id, category, message, actor, created_at AS createdAt FROM site_logs ORDER BY created_at DESC LIMIT 100').all(),
+  ]);
+  return json({ stats: {
+    articles: Number(catalog?.articles || 0), authors: Number((await env.DB.prepare('SELECT COUNT(*) AS total FROM authors').first())?.total || 0),
+    users: Number(users?.total || 0), publishedReviews: Number(reviews?.published || 0), pendingReviews: Number(reviews?.pending || 0),
+    ratings: Number(ratings?.total || 0), averageRating: ratings?.average == null ? null : Number(ratings.average), likes: Number(engagement?.likes || 0),
+    newReviewsWeek: Number(reviews?.recent || 0), newUsersWeek: Number(users?.recent || 0),
+  }, logs: logs.results });
+}
+
 /* ---------- публичные данные ---------- */
 
 async function getData(env, admin, userId) {
@@ -121,6 +148,10 @@ async function likeReview(env, user, reviewId) {
     await env.DB.prepare('INSERT OR IGNORE INTO notifications (id, user_id, type, review_id, review_title, actor_user_id, actor_name, created_at) VALUES (?, ?, \'review_liked\', ?, ?, ?, ?, ?)')
       .bind(crypto.randomUUID(), review.reviewer_user_id, reviewId, review.review_title || 'Рецензия', user.id, liker?.username || 'Пользователь', likedAt).run();
   }
+  if (inserted.meta.changes) {
+    const liker = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(user.id).first();
+    await recordSiteLog(env, 'Лайк', `Поставлен лайк рецензии «${review.review_title || 'Без заголовка'}»`, liker?.username || 'Пользователь');
+  }
   const result = await env.DB.prepare('SELECT COUNT(*) AS likes FROM review_likes WHERE review_id = ?').bind(reviewId).first();
   return json({ ok: true, likes: Number(result?.likes || 0), likedByMe: true });
 }
@@ -156,6 +187,7 @@ async function register(request, env) {
     if (isUnique(e)) throw new HttpError(409, 'Это имя уже занято');
     throw e;
   }
+  await recordSiteLog(env, 'Регистрация', `Создан аккаунт «${name}»`, name);
   const { cookie } = await createSession(env, id);
   const me = await meInfo(env, { id, username: name, avatar: '', bio: '', created_at: Date.now() });
   return json({ ok: true, ...me }, 201, { 'Set-Cookie': cookie });
@@ -222,6 +254,7 @@ async function updateProfile(request, env, user) {
   }
   await env.DB.prepare('UPDATE users SET bio = ?, avatar = ?, social_links = ?, favorite_author_ids = ?, favorite_articles = ? WHERE id = ?')
     .bind(bio, avatar, JSON.stringify(socialLinks), JSON.stringify(favoriteAuthorIds), JSON.stringify(favoriteArticles), user.id).run();
+  await recordSiteLog(env, 'Аккаунт', 'Обновлён профиль пользователя', user.username);
   return json({ ok: true });
 }
 
@@ -243,6 +276,7 @@ async function uploadUserAvatar(request, env, user) {
   for (let i = 0; i < data.length; i += 0x8000) binary += String.fromCharCode(...data.subarray(i, i + 0x8000));
   const avatar = `data:image/webp;base64,${btoa(binary)}`;
   await env.DB.prepare('UPDATE users SET avatar = ? WHERE id = ?').bind(avatar, user.id).run();
+  await recordSiteLog(env, 'Аккаунт', 'Обновлена фотография профиля', user.username);
   return json({ ok: true, avatar: `/api/avatar/${user.id}` });
 }
 
@@ -276,6 +310,7 @@ async function changePassword(request, env, user) {
     env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(await hashPassword(next, env), user.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
   ]);
+  await recordSiteLog(env, 'Аккаунт', 'Изменён пароль пользователя', user.username);
   const { cookie } = await createSession(env, user.id);
   return json({ ok: true }, 200, { 'Set-Cookie': cookie });
 }
@@ -299,6 +334,7 @@ async function deleteAccount(request, env, user) {
     throw new HttpError(401, 'Пароль неверен');
   }
   await env.DB.batch(deleteUserStatements(env, user.id));
+  await recordSiteLog(env, 'Аккаунт', 'Удалён пользовательский аккаунт', user.username);
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
 }
 
@@ -326,6 +362,7 @@ async function setArticleDate(request, env) {
   if (!article && !catalogArticle) throw new HttpError(404, 'Статья не найдена');
   if (catalogArticle) {
     await env.DB.prepare('UPDATE articles SET created_date = ? WHERE article_title = ? COLLATE NOCASE').bind(createdDate, catalogArticle.article_title).run();
+    await recordSiteLog(env, 'Каталог', `Изменена дата выхода статьи «${catalogArticle.article_title}»`, 'Администратор');
     return json({ ok: true, articleTitle: catalogArticle.article_title, createdDate });
   }
   if (!article) throw new HttpError(404, 'Статья не найдена');
@@ -335,6 +372,7 @@ async function setArticleDate(request, env) {
     'INSERT INTO article_dates (article_key, article_title, created_date, updated_at) VALUES (?, ?, ?, ?) ' +
     'ON CONFLICT(article_key) DO UPDATE SET article_title = excluded.article_title, created_date = excluded.created_date, updated_at = excluded.updated_at',
   ).bind(articleKey, articleTitle, createdDate, Date.now()).run();
+  await recordSiteLog(env, 'Каталог', `Изменена дата выхода статьи «${articleTitle}»`, 'Администратор');
   return json({ ok: true, articleTitle, createdDate });
 }
 
@@ -352,16 +390,14 @@ function validateArticleAuthors(body) {
 }
 function validateCoverImage(value) {
   if (value == null || value === '') return '';
-  if (typeof value !== 'string' || value.length > 700000) throw new HttpError(413, 'Изображение должно быть не больше 500 КБ');
-  const m = value.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
-  if (!m || m[2].length % 4 !== 0) throw new HttpError(400, 'Разрешены только PNG, JPEG и WebP');
-  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
-  if (bytes.length > 512000) throw new HttpError(413, 'Изображение должно быть не больше 500 КБ');
-  const valid = m[1] === 'png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
-    : m[1] === 'jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
-      : String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
-  if (!valid) throw new HttpError(400, 'Содержимое файла не совпадает с его типом');
-  return value;
+  if (typeof value !== 'string' || value.length > 2048) throw new HttpError(400, 'URL изображения слишком длинный');
+  let url;
+  try { url = new URL(value.trim()); } catch { throw new HttpError(400, 'Укажите корректный URL изображения'); }
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  const ipv4 = host.split('.').map(Number);
+  const localAddress = host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.startsWith('[') || (ipv4.length === 4 && ipv4.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) && (ipv4[0] === 0 || ipv4[0] === 10 || ipv4[0] === 127 || (ipv4[0] === 169 && ipv4[1] === 254) || (ipv4[0] === 172 && ipv4[1] >= 16 && ipv4[1] <= 31) || (ipv4[0] === 192 && ipv4[1] === 168)));
+  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || localAddress) throw new HttpError(400, 'Для изображения разрешены публичные HTTPS-ссылки без логина и пароля');
+  return url.toString();
 }
 async function checkArticleAuthors(env, ids) {
   const placeholders = ids.map(() => '?').join(',');
@@ -369,7 +405,7 @@ async function checkArticleAuthors(env, ids) {
   if (found.results.length !== ids.length) throw new HttpError(400, 'Один из авторов не найден');
 }
 async function adminCreateArticle(request, env) {
-  const body = await readJson(request, 750 * 1024);
+  const body = await readJson(request, 16 * 1024);
   const title = clean(body.title, { min: 2, max: LIMITS.article, label: 'Название статьи' });
   const authorIds = validateArticleAuthors(body);
   await checkArticleAuthors(env, authorIds);
@@ -387,12 +423,13 @@ async function adminCreateArticle(request, env) {
     if (isUnique(e)) throw new HttpError(409, 'Статья с таким названием уже есть в каталоге');
     throw e;
   }
+  await recordSiteLog(env, 'Каталог', `Добавлена статья «${title}»`, 'Администратор');
   return json({ ok: true }, 201);
 }
 async function adminUpdateArticle(request, env, key) {
   const article = await env.DB.prepare('SELECT * FROM articles WHERE article_key = ?').bind(key).first();
   if (!article) throw new HttpError(404, 'Статья не найдена');
-  const body = await readJson(request, 750 * 1024);
+  const body = await readJson(request, 16 * 1024);
   const title = clean(body.title, { min: 2, max: LIMITS.article, label: 'Название статьи' });
   const authorIds = validateArticleAuthors(body);
   await checkArticleAuthors(env, authorIds);
@@ -406,6 +443,7 @@ async function adminUpdateArticle(request, env, key) {
     statements.push(...authorIds.map((id, i) => env.DB.prepare('INSERT INTO article_authors (article_key, author_id, position) VALUES (?, ?, ?)').bind(newKey, id, i)));
     await env.DB.batch(statements);
   } catch (e) { if (isUnique(e)) throw new HttpError(409, 'Статья с таким названием уже есть в каталоге'); throw e; }
+  await recordSiteLog(env, 'Каталог', `Обновлена статья «${title}»`, 'Администратор');
   return json({ ok: true });
 }
 async function createReview(request, env, user, admin) {
@@ -461,6 +499,7 @@ async function createReview(request, env, user, admin) {
   const inserts = [legacyReview];
   if (hasScore) inserts.push(env.DB.prepare('INSERT OR IGNORE INTO review_ratings (review_id, rating) VALUES (?, ?)').bind(review.id, rating));
   await env.DB.batch(inserts);
+  await recordSiteLog(env, 'Новая запись', `${hasReview ? 'Добавлена рецензия' : 'Выставлена оценка'} для «${articleTitle}» (${review.status === 'pending' ? 'ожидает модерации' : 'опубликована'})`, reviewerName);
   return json({ ok: true, status: review.status, id: review.id }, 201);
 }
 
@@ -484,6 +523,7 @@ async function createOwnAuthor(request, env, user) {
     if (isUnique(e)) throw new HttpError(409, 'Автор с таким именем уже существует');
     throw e;
   }
+  await recordSiteLog(env, 'Профиль автора', `Создана карточка автора «${name}»`, user.username);
   return json({ ok: true, id }, 201);
 }
 
@@ -502,6 +542,7 @@ async function updateAuthor(request, env, id, user, admin) {
     if (isUnique(e)) throw new HttpError(409, 'Автор с таким именем уже существует');
     throw e;
   }
+  await recordSiteLog(env, 'Профиль автора', `Изменена карточка автора «${name}»`, admin ? 'Администратор' : (user?.username || 'Автор'));
   return json({ ok: true });
 }
 
@@ -521,6 +562,7 @@ async function adminCreateAuthor(request, env) {
     if (isUnique(e)) throw new HttpError(409, 'Автор с таким именем уже существует');
     throw e;
   }
+  await recordSiteLog(env, 'Профиль автора', `Создана карточка автора «${name}»`, 'Администратор');
   return json({ ok: true, id }, 201);
 }
 
@@ -533,6 +575,7 @@ async function deleteAuthor(env, id) {
     env.DB.prepare("UPDATE reviews SET author_id = 'a1' WHERE author_id = ?").bind(id),
     env.DB.prepare('DELETE FROM authors WHERE id = ?').bind(id),
   ]);
+  await recordSiteLog(env, 'Профиль автора', `Удалена карточка автора ${id}`, 'Администратор');
   return json({ ok: true });
 }
 
@@ -787,6 +830,7 @@ export async function onRequest({ request, env }) {
     if (path.startsWith('/api/admin/')) {
       if (!(await isAdmin(request, env))) throw new HttpError(401, 'Требуется вход администратора');
 
+      if (path === '/api/admin/dashboard' && method === 'GET') return await adminDashboard(env);
       if (path === '/api/admin/articles/date' && method === 'POST') return await setArticleDate(request, env);
       if (path === '/api/admin/articles' && method === 'POST') return await adminCreateArticle(request, env);
       const articleEdit = path.match(/^\/api\/admin\/articles\/(.+)$/);
@@ -821,6 +865,7 @@ export async function onRequest({ request, env }) {
             ...(review.reviewer_user_id ? [env.DB.prepare("INSERT OR IGNORE INTO notifications (id, user_id, type, review_id, review_title, created_at) VALUES (?, ?, 'review_rejected', ?, ?, ?)").bind(crypto.randomUUID(), review.reviewer_user_id, m[1], review.review_title, now)] : []),
           ]);
         }
+        await recordSiteLog(env, 'Модерация', `${m[2] === 'approve' ? 'Одобрена' : 'Отклонена'} рецензия «${review.review_title || 'Без заголовка'}»`, 'Администратор');
         return json({ ok: true });
       }
       const deleteReviewMatch = path.match(/^\/api\/admin\/reviews\/([A-Za-z0-9_-]{1,64})$/);

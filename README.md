@@ -26,6 +26,8 @@ migrations/004_independent_ratings_reviews.sql  раздельные оценк�
 migrations/006_review_likes.sql  лайки пользовательских рецензий
 migrations/007_article_catalog.sql  каталог статей с автором, датой и ссылкой на ЗМВ
 migrations/008_ratings_notifications.sql  переход оценок на шкалу 0–100 и уведомления
+migrations/009_article_collaborators_images.sql  обложки и соавторы статей
+migrations/010_admin_dashboard.sql  журнал действий для админ-панели
 ```
 
 ## Обновление уже работающего сайта
@@ -38,7 +40,9 @@ migrations/008_ratings_notifications.sql  переход оценок на шк�
 6. Перед версией 2.2 выполните `migrations/008_ratings_notifications.sql`. Её создание таблиц и обратное заполнение оценок допускают повторный запуск.
 7. Старый итог `score` (0–90) переводится для каждой записи с оценкой по формуле `ROUND(score × 100 / 90)`, с ограничением результата диапазоном 0–100. Это сохраняет относительный итог старой системы (включая нелинейный коэффициент атмосферы, уже учтённый в `score`), автора и число голосов. Поля критериев и исходный `score` не изменяются; новые оценки хранятся отдельно в `review_ratings`.
 8. Затем обновите файлы сайта и дождитесь деплоя Cloudflare Pages. Миграция нужна до выкладки API версии 2.2.
-9. Старые рецензии, авторы, аккаунты, лайки и исходные данные оценок сохраняются. Новая пустая база — выполните актуальный `schema.sql`.
+9. Для обновления 2.3 выполните `migrations/009_article_collaborators_images.sql` один раз до выкладки API; старая связь «статья — автор» переносится в таблицу соавторов.
+10. Для мини-обновления 2.3.1 выполните `migrations/010_admin_dashboard.sql` один раз до выкладки API; она создаёт журнал для закрытой админ-панели.
+11. Старые рецензии, авторы, аккаунты, лайки и исходные данные оценок сохраняются. Новая пустая база — выполните актуальный `schema.sql`.
 
 ## Настройка Cloudflare (первый запуск)
 
@@ -65,4 +69,4 @@ npx wrangler d1 execute zmv-wiki --local --file=schema.sql
 npx wrangler pages dev public --d1=DB --binding ADMIN_PASSWORD=long-local-password
 ```
 
-Проверка миграции рейтинга: `python3 -m unittest tests/migration_008_test.py -v`.
+Проверки миграций: `python3 -m unittest tests/migration_008_test.py tests/migration_009_test.py tests/migration_010_test.py -v`.
