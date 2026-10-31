@@ -79,7 +79,7 @@ async function getData(env, admin, userId) {
   const usersSql = admin
     ? 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, banned FROM users ORDER BY created_at DESC LIMIT 5000'
     : 'SELECT id, username, avatar, bio, social_links, favorite_author_ids, favorite_articles, created_at, 0 AS banned FROM users WHERE banned = 0 ORDER BY created_at DESC LIMIT 5000';
-  const [authors, reviews, users, articleDates, articles] = await Promise.all([
+  const [authors, reviews, users, articleDates, articles, articleAuthors] = await Promise.all([
     env.DB.prepare(
       'SELECT a.id, a.name, a.avatar, a.bio, a.updated_at, u.username AS owner FROM authors a ' +
       'LEFT JOIN users u ON u.id = a.owner_user_id ORDER BY a.created_at ASC, a.name ASC',
@@ -92,14 +92,17 @@ async function getData(env, admin, userId) {
     ).bind(userId || '').all(),
     env.DB.prepare(usersSql).all(),
     env.DB.prepare('SELECT article_title, created_date FROM article_dates ORDER BY article_title COLLATE NOCASE').all(),
-    env.DB.prepare('SELECT article_title, author_id, created_date, wiki_url FROM articles ORDER BY article_title COLLATE NOCASE').all(),
+    env.DB.prepare('SELECT article_key, article_title, author_id, created_date, wiki_url, cover_image FROM articles ORDER BY article_title COLLATE NOCASE').all(),
+    env.DB.prepare('SELECT article_key, author_id FROM article_authors ORDER BY position, author_id').all(),
   ]);
+  const authorIdsByKey = new Map();
+  for (const row of articleAuthors.results) { if (!authorIdsByKey.has(row.article_key)) authorIdsByKey.set(row.article_key, []); authorIdsByKey.get(row.article_key).push(row.author_id); }
   return {
     authors: authors.results.map(rowToAuthor),
     reviews: reviews.results.map(rowToReview),
     users: users.results.map(rowToUser),
     articleDates: articleDates.results.map((row) => ({ articleTitle: row.article_title, createdDate: row.created_date })),
-    articles: articles.results.map((row) => ({ title: row.article_title, authorId: row.author_id, createdDate: row.created_date, wikiUrl: row.wiki_url })),
+    articles: articles.results.map((row) => ({ title: row.article_title, authorId: row.author_id, authorIds: authorIdsByKey.get(row.article_key) || [row.author_id], createdDate: row.created_date, wikiUrl: row.wiki_url, coverImage: row.cover_image || '' })),
   };
 }
 
@@ -335,31 +338,76 @@ async function setArticleDate(request, env) {
   return json({ ok: true, articleTitle, createdDate });
 }
 
+function validateWikiUrl(value) {
+  if (typeof value !== 'string' || value.length > 2048) throw new HttpError(400, 'Укажите ссылку на статью в ЗМВ');
+  let url;
+  try { url = new URL(value.trim()); } catch { throw new HttpError(400, 'Проверьте ссылку на статью в ЗМВ'); }
+  if (url.protocol !== 'https:' || url.hostname !== 'minecraft-backrooms.fandom.com' || url.username || url.password) throw new HttpError(400, 'Ссылка должна вести на HTTPS-страницу minecraft-backrooms.fandom.com');
+  return url.toString();
+}
+function validateArticleAuthors(body) {
+  const ids = Array.isArray(body.authorIds) ? body.authorIds : [body.authorId];
+  if (!ids.length || ids.length > 20 || ids.some((id) => typeof id !== 'string' || !ID_RE.test(id)) || new Set(ids).size !== ids.length) throw new HttpError(400, 'Выберите от одного до 20 разных авторов');
+  return ids;
+}
+function validateCoverImage(value) {
+  if (value == null || value === '') return '';
+  if (typeof value !== 'string' || value.length > 700000) throw new HttpError(413, 'Изображение должно быть не больше 500 КБ');
+  const m = value.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+  if (!m || m[2].length % 4 !== 0) throw new HttpError(400, 'Разрешены только PNG, JPEG и WebP');
+  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+  if (bytes.length > 512000) throw new HttpError(413, 'Изображение должно быть не больше 500 КБ');
+  const valid = m[1] === 'png' ? bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    : m[1] === 'jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      : String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
+  if (!valid) throw new HttpError(400, 'Содержимое файла не совпадает с его типом');
+  return value;
+}
+async function checkArticleAuthors(env, ids) {
+  const placeholders = ids.map(() => '?').join(',');
+  const found = await env.DB.prepare(`SELECT id FROM authors WHERE id IN (${placeholders})`).bind(...ids).all();
+  if (found.results.length !== ids.length) throw new HttpError(400, 'Один из авторов не найден');
+}
 async function adminCreateArticle(request, env) {
-  const body = await readJson(request, 8 * 1024);
+  const body = await readJson(request, 750 * 1024);
   const title = clean(body.title, { min: 2, max: LIMITS.article, label: 'Название статьи' });
-  const authorId = typeof body.authorId === 'string' && ID_RE.test(body.authorId) ? body.authorId : '';
-  if (!authorId || !(await env.DB.prepare('SELECT id FROM authors WHERE id = ?').bind(authorId).first())) {
-    throw new HttpError(400, 'Выберите существующего автора');
-  }
+  const authorIds = validateArticleAuthors(body);
+  await checkArticleAuthors(env, authorIds);
   const createdDate = validateArticleDate(body.createdDate);
-  if (typeof body.wikiUrl !== 'string' || body.wikiUrl.length > 2048) throw new HttpError(400, 'Укажите ссылку на статью в ЗМВ');
-  let wikiUrl;
-  try { wikiUrl = new URL(body.wikiUrl.trim()); } catch { throw new HttpError(400, 'Проверьте ссылку на статью в ЗМВ'); }
-  if (wikiUrl.protocol !== 'https:' || wikiUrl.hostname !== 'minecraft-backrooms.fandom.com' || wikiUrl.username || wikiUrl.password) {
-    throw new HttpError(400, 'Ссылка должна вести на HTTPS-страницу minecraft-backrooms.fandom.com');
-  }
+  const wikiUrl = validateWikiUrl(body.wikiUrl);
+  const coverImage = validateCoverImage(body.coverImage);
+  const key = title.normalize('NFC').toLowerCase();
   const now = Date.now();
   try {
-    await env.DB.prepare('INSERT INTO articles (article_key, article_title, author_id, created_date, wiki_url, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(title.normalize('NFC').toLowerCase(), title, authorId, createdDate, wikiUrl.toString(), now).run();
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO articles (article_key, article_title, author_id, created_date, wiki_url, created_at, cover_image) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(key, title, authorIds[0], createdDate, wikiUrl, now, coverImage),
+      ...authorIds.map((id, i) => env.DB.prepare('INSERT INTO article_authors (article_key, author_id, position) VALUES (?, ?, ?)').bind(key, id, i)),
+    ]);
   } catch (e) {
     if (isUnique(e)) throw new HttpError(409, 'Статья с таким названием уже есть в каталоге');
     throw e;
   }
   return json({ ok: true }, 201);
 }
-
+async function adminUpdateArticle(request, env, key) {
+  const article = await env.DB.prepare('SELECT * FROM articles WHERE article_key = ?').bind(key).first();
+  if (!article) throw new HttpError(404, 'Статья не найдена');
+  const body = await readJson(request, 750 * 1024);
+  const title = clean(body.title, { min: 2, max: LIMITS.article, label: 'Название статьи' });
+  const authorIds = validateArticleAuthors(body);
+  await checkArticleAuthors(env, authorIds);
+  const createdDate = validateArticleDate(body.createdDate);
+  const wikiUrl = validateWikiUrl(body.wikiUrl);
+  const coverImage = validateCoverImage(body.coverImage);
+  const newKey = title.normalize('NFC').toLowerCase();
+  try {
+    const statements = [env.DB.prepare('DELETE FROM article_authors WHERE article_key = ?').bind(key), env.DB.prepare('UPDATE articles SET article_key = ?, article_title = ?, author_id = ?, created_date = ?, wiki_url = ?, cover_image = ? WHERE article_key = ?').bind(newKey, title, authorIds[0], createdDate, wikiUrl, coverImage, key),
+      env.DB.prepare('UPDATE reviews SET article_title = ? WHERE article_title = ?').bind(title, article.article_title)];
+    statements.push(...authorIds.map((id, i) => env.DB.prepare('INSERT INTO article_authors (article_key, author_id, position) VALUES (?, ?, ?)').bind(newKey, id, i)));
+    await env.DB.batch(statements);
+  } catch (e) { if (isUnique(e)) throw new HttpError(409, 'Статья с таким названием уже есть в каталоге'); throw e; }
+  return json({ ok: true });
+}
 async function createReview(request, env, user, admin) {
   const body = await readJson(request, 64 * 1024);
 
@@ -479,6 +527,9 @@ async function adminCreateAuthor(request, env) {
 async function deleteAuthor(env, id) {
   if (id === 'a1') throw new HttpError(400, 'Нельзя удалить автора по умолчанию');
   await env.DB.batch([
+    env.DB.prepare('DELETE FROM article_authors WHERE author_id = ?').bind(id),
+    env.DB.prepare("UPDATE articles SET author_id = COALESCE((SELECT aa.author_id FROM article_authors aa WHERE aa.article_key = articles.article_key ORDER BY aa.position LIMIT 1), 'a1') WHERE author_id = ?").bind(id),
+    env.DB.prepare("INSERT OR IGNORE INTO article_authors (article_key, author_id, position) SELECT a.article_key, 'a1', 0 FROM articles a WHERE NOT EXISTS (SELECT 1 FROM article_authors aa WHERE aa.article_key = a.article_key)"),
     env.DB.prepare("UPDATE reviews SET author_id = 'a1' WHERE author_id = ?").bind(id),
     env.DB.prepare('DELETE FROM authors WHERE id = ?').bind(id),
   ]);
@@ -738,6 +789,8 @@ export async function onRequest({ request, env }) {
 
       if (path === '/api/admin/articles/date' && method === 'POST') return await setArticleDate(request, env);
       if (path === '/api/admin/articles' && method === 'POST') return await adminCreateArticle(request, env);
+      const articleEdit = path.match(/^\/api\/admin\/articles\/(.+)$/);
+      if (articleEdit && method === 'PUT') return await adminUpdateArticle(request, env, decodeURIComponent(articleEdit[1]));
 
       if (path === '/api/admin/pending' && method === 'GET') {
         const res = await env.DB.prepare(`${SELECT_REVIEWS} WHERE reviews.status = 'pending' AND review_decisions.review_id IS NULL ORDER BY reviews.created_at ASC LIMIT 500`).all();

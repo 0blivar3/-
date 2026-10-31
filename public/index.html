@@ -52,6 +52,7 @@
     <a class="nav-btn" href="#/critics" data-route="critics">🤖 Критики</a>
     <a class="nav-btn" href="#/evaluator" data-route="evaluator">📝 Оценить статью</a>
     <a class="nav-btn" href="#/value" data-route="value">💎 Ценность ЗМВ</a>
+    <a class="nav-btn" href="#/faq" data-route="faq">❔ FAQ</a>
     <a class="nav-btn" href="#/updates" data-route="updates">🕘 История обновлений</a>
     <a class="nav-btn admin-only" href="#/moderation" data-route="moderation">🛡 Модерация <span id="pendingBadge" class="pending-badge" hidden>0</span></a>
   </nav>
@@ -370,9 +371,11 @@
               <label class="field-label" for="newArticleTitle">Название статьи</label>
               <input id="newArticleTitle" class="input-field" type="text" minlength="2" maxlength="150" required autocomplete="off">
               <label class="field-label" for="newArticleAuthor">Автор</label>
-              <select id="newArticleAuthor" class="input-field" required></select>
+              <select id="newArticleAuthor" class="input-field" required multiple size="4" aria-describedby="authorSelectHelp"></select><p id="authorSelectHelp" class="muted tiny">Можно выбрать несколько авторов.</p>
               <label class="field-label" for="newArticleDate">Дата создания</label>
               <input id="newArticleDate" class="input-field" type="date" required>
+              <label class="field-label" for="newArticleImage">Изображение статьи (PNG/JPEG/WebP, до 500 КБ)</label>
+              <input id="newArticleImage" class="input-field" type="file" accept="image/png,image/jpeg,image/webp">
               <label class="field-label" for="newArticleUrl">Ссылка на статью в ЗМВ</label>
               <input id="newArticleUrl" class="input-field" type="url" maxlength="2048" required placeholder="https://minecraft-backrooms.fandom.com/ru/wiki/…">
               <button type="submit" class="btn btn-primary">Добавить статью</button>
@@ -382,6 +385,16 @@
         </div>
       </div>
     </section>
+
+    <section id="tab-faq" class="tab-content" aria-label="Частые вопросы"><div class="wrap wrap-1100"><div class="panel"><h2 class="panel-title">❔ Частые вопросы</h2>
+      <details><summary>Что это за сайт?</summary><p>Фанатский портал для каталога статей «Закулисья Майнкрафта Вики», оценок и рецензий. Он не является официальной частью Вики.</p></details>
+      <details><summary>Как считается оценка статьи?</summary><p>В новой системе учитываются оценки от 0 до 100. На странице статьи показаны средний балл и число оценок. Старые оценки перенесены в эту шкалу.</p></details>
+      <details><summary>Почему моя рецензия не видна сразу?</summary><p>Рецензии пользователей проходят модерацию. После решения автору учётной записи отправляется уведомление.</p></details>
+      <details><summary>Кто может ставить лайки?</summary><p>Вошедшие пользователи могут отмечать понравившиеся опубликованные рецензии. Нельзя лайкнуть собственную рецензию или поставить повторный лайк.</p></details>
+      <details><summary>Что показывают профили?</summary><p>Профили авторов содержат статьи, связанные с автором, и доступную на сайте статистику. Профиль пользователя показывает публичные сведения и его опубликованную активность.</p></details>
+      <details><summary>Как добавить или исправить статью?</summary><p>Каталог и сведения о статьях редактируются администраторами. Ссылка открывает страницу на minecraft-backrooms.fandom.com.</p></details>
+      <details><summary>Есть ли особые правила использования?</summary><p>Пожалуйста, публикуйте относящиеся к статье рецензии и соблюдайте обычные нормы уважительного общения. Подробные дополнительные правила на сайте не установлены.</p></details>
+    </div></div></section>
 
     <!-- АВТОРЫ -->
     <section id="tab-authors" class="tab-content" aria-label="Авторы">
